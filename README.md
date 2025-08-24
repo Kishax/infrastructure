@@ -1,6 +1,6 @@
-# Kishax Infrastructure
+# KishaX Infrastructure
 
-Minecraft サーバー Kishax の統合インフラストラクチャプロジェクト
+KishaX の統合インフラストラクチャプロジェクト
 
 ## プロジェクト構成
 
@@ -66,11 +66,6 @@ make build-all
 - **AWS インフラ**: [aws/README.md](./aws/README.md)  
 - **デプロイメント**: [aws/DEPLOY.md](./aws/DEPLOY.md)
 - **各サービス詳細**: [apps/*/README.md](./apps/)
-
-## ライセンス
-
-このプロジェクトは私的利用のために開発されています。
-ただ、[MIT](LICENSE)ライセンスに基づき、コードの使用・改変は自由です。
 
 ---
 

@@ -27,6 +27,54 @@ sync: ## Gitサブモジュールを最新に同期
 ## 監視・ステータス確認
 ## =============================================================================
 
+.PHONY: billing-current
+billing-current: ## 現在の課金量を確認（今月・先月）
+	@echo "💰 AWS課金情報を取得中..."
+	@START_DATE=$$(date -v-1m +"%Y-%m-01" 2>/dev/null || date -d "$(date +%Y-%m-01) -1 month" +"%Y-%m-01"); \
+	END_DATE=$$(date +"%Y-%m-01"); \
+	CURRENT_END_DATE=$$(date -v+1d +"%Y-%m-%d" 2>/dev/null || date -d "tomorrow" +"%Y-%m-%d"); \
+	echo "📊 課金情報 ($$START_DATE から $$CURRENT_END_DATE まで):"; \
+	aws ce get-cost-and-usage \
+		--time-period Start=$$START_DATE,End=$$CURRENT_END_DATE \
+		--granularity MONTHLY \
+		--metrics BlendedCost \
+		--group-by Type=DIMENSION,Key=SERVICE \
+		--profile $(AWS_PROFILE) \
+		--query 'ResultsByTime[*].{Period:TimePeriod.Start,TotalCost:Total.BlendedCost.Amount,Currency:Total.BlendedCost.Unit,Services:Groups[?Metrics.BlendedCost.Amount!=`0.0`].{Service:Keys[0],Cost:Metrics.BlendedCost.Amount}}' \
+		--output table
+
+.PHONY: billing-month-to-date
+billing-month-to-date: ## 今月の累計課金額を確認（今日まで）
+	@echo "💰 今月の累計課金額を取得中..."
+	@THIS_MONTH_START=$$(date +"%Y-%m-01"); \
+	TODAY_PLUS_1=$$(date -v+1d +"%Y-%m-%d" 2>/dev/null || date -d "tomorrow" +"%Y-%m-%d"); \
+	echo "📊 今月累計課金額 ($$THIS_MONTH_START から今日まで):"; \
+	TOTAL_COST=$$(aws ce get-cost-and-usage \
+		--time-period Start=$$THIS_MONTH_START,End=$$TODAY_PLUS_1 \
+		--granularity MONTHLY \
+		--metrics BlendedCost \
+		--profile $(AWS_PROFILE) \
+		--query 'ResultsByTime[0].Total.BlendedCost.Amount' \
+		--output text); \
+	CURRENCY=$$(aws ce get-cost-and-usage \
+		--time-period Start=$$THIS_MONTH_START,End=$$TODAY_PLUS_1 \
+		--granularity MONTHLY \
+		--metrics BlendedCost \
+		--profile $(AWS_PROFILE) \
+		--query 'ResultsByTime[0].Total.BlendedCost.Unit' \
+		--output text); \
+	echo "💵 合計: $$TOTAL_COST $$CURRENCY"; \
+	echo ""; \
+	echo "📋 サービス別詳細:"; \
+	aws ce get-cost-and-usage \
+		--time-period Start=$$THIS_MONTH_START,End=$$TODAY_PLUS_1 \
+		--granularity MONTHLY \
+		--metrics BlendedCost \
+		--group-by Type=DIMENSION,Key=SERVICE \
+		--profile $(AWS_PROFILE) \
+		--query 'ResultsByTime[0].Groups[?Metrics.BlendedCost.Amount!=`0.0`].{Service:Keys[0],Cost:Metrics.BlendedCost.Amount,Currency:Metrics.BlendedCost.Unit}' \
+		--output table
+
 .PHONY: status-cloudformation
 status-cloudformation: ## CloudFormationスタックステータスを確認
 	@echo "📊 CloudFormationスタックステータス確認中..."

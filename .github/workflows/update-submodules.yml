@@ -2,7 +2,7 @@ name: Update Submodules
 
 on:
   repository_dispatch:
-    types: [kishax-web, kishax, gather-bot, discord-bot, test]
+    types: [ "Detect changes from kishax-web", "Detect changes from kishax", "Detect changes from gather-bot", "Detect changes from discord-bot" ]
 
 jobs:
   update-submodules:

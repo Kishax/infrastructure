@@ -24,8 +24,6 @@ kishax/
 - **Minecraft Plugins**: Velocity/Spigotプラグイン (Java)
 - **Web Application**: プレイヤー認証・管理 (Next.js/ECS)
 
-📁 **詳細**: [apps/README.md](./apps/README.md)
-
 ## クイックスタート
 
 ### 初回セットアップ

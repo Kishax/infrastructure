@@ -1,0 +1,9 @@
+[submodule "apps/discord-bot"]
+	path = apps/discord-bot
+	url = https://github.com/Kishax/discord-bot.git
+[submodule "apps/web"]
+	path = apps/web
+	url = https://github.com/Kishax/kishax-web.git
+[submodule "apps/gather-bot"]
+	path = apps/gather-bot
+	url = https://github.com/Kishax/gather-bot.git

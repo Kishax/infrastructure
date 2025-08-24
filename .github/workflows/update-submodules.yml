@@ -16,8 +16,7 @@ jobs:
 
       - name: Update submodules to latest commit
         run: |
-          git config --global --add safe.directory /github/workspace/apps/discord-bot # ★ discord-botのリポジトリパスに合わせる
-          git submodule update --init --remote --merge --rebase
+          git submodule update --remote --merge --rebase
 
       - name: Check for changes
         id: git_status

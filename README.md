@@ -2,6 +2,14 @@
 
 KishaX の統合インフラストラクチャプロジェクト
 
+## Architecture
+
+```
+[Minecraft Server] → [API Gateway] → [Lambda] → [SQS] → [Discord Bot]
+[Web App] ←→ [RDS PostgreSQL]
+[Gather Bot] → [Slack API]
+```
+
 ## Tree
 
 ```
@@ -13,15 +21,6 @@ kishax/
 │   └── web/               # Web アプリケーション (ECS)
 └── aws/                   # AWS共通リソース・ポリシー
 ```
-
-## Architecture
-
-```
-[Minecraft Server] → [API Gateway] → [Lambda] → [SQS] → [Discord Bot]
-[Web App] ←→ [RDS PostgreSQL]
-[Gather Bot] → [Slack API]
-```
-
 ## Services
 
 このプロジェクトは4つの主要アプリケーションとAWSインフラから構成されています：

@@ -3,6 +3,8 @@ package net.kishax.integration;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import software.amazon.awssdk.services.apigateway.ApiGatewayClient;
+import software.amazon.awssdk.services.apigateway.model.*;
 import software.amazon.awssdk.services.ssm.SsmClient;
 import software.amazon.awssdk.services.ssm.model.GetParameterRequest;
 import software.amazon.awssdk.services.sqs.SqsClient;
@@ -147,5 +149,99 @@ public class TestUtils {
       logger.error("Failed to get SQS message count for: {}", queueUrl, e);
       return 0;
     }
+  }
+
+  /**
+   * API Gateway リソースIDを取得
+   */
+  public static String getApiGatewayResourceId(ApiGatewayClient apiGatewayClient, String restApiId, String pathPart) {
+    try {
+      GetResourcesRequest request = GetResourcesRequest.builder()
+          .restApiId(restApiId)
+          .build();
+      
+      GetResourcesResponse response = apiGatewayClient.getResources(request);
+      
+      for (Resource resource : response.items()) {
+        if (pathPart.equals(resource.pathPart())) {
+          return resource.id();
+        }
+      }
+      
+      throw new RuntimeException("API Gateway resource not found: " + pathPart);
+    } catch (Exception e) {
+      logger.error("Failed to get API Gateway resource ID for: {}", pathPart, e);
+      throw new RuntimeException("API Gateway resource lookup failed", e);
+    }
+  }
+
+  /**
+   * API Gateway経由でメッセージ送信
+   */
+  public static void sendApiGatewayMessage(ApiGatewayClient apiGatewayClient, String restApiId, String pathPart, Map<String, Object> message) throws Exception {
+    String resourceId = getApiGatewayResourceId(apiGatewayClient, restApiId, pathPart);
+    String requestBody = objectMapper.writeValueAsString(message);
+    
+    TestInvokeMethodRequest request = TestInvokeMethodRequest.builder()
+        .restApiId(restApiId)
+        .resourceId(resourceId)
+        .httpMethod("POST")
+        .pathWithQueryString("/" + pathPart)
+        .body(requestBody)
+        .headers(Map.of(
+            "Content-Type", "application/json",
+            "Authorization", generateAwsAuthHeader("POST", "/" + pathPart, requestBody, TestConfig.AWS_REGION.id())
+        ))
+        .build();
+
+    TestInvokeMethodResponse response = apiGatewayClient.testInvokeMethod(request);
+    
+    if (response.status() < 200 || response.status() >= 300) {
+      throw new RuntimeException("API Gateway request failed: " + response.status() + " " + response.body());
+    }
+  }
+
+  /**
+   * SQSメッセージ待機
+   */
+  public static Message waitForSqsMessage(SqsClient sqsClient, String queueUrl, Duration timeout) throws InterruptedException {
+    long timeoutMs = timeout.toMillis();
+    long startTime = System.currentTimeMillis();
+    
+    while (System.currentTimeMillis() - startTime < timeoutMs) {
+      ReceiveMessageResponse response = sqsClient.receiveMessage(
+          ReceiveMessageRequest.builder()
+              .queueUrl(queueUrl)
+              .maxNumberOfMessages(1)
+              .waitTimeSeconds(5)
+              .messageAttributeNames("All")
+              .build()
+      );
+      
+      if (!response.messages().isEmpty()) {
+        Message message = response.messages().get(0);
+        
+        // メッセージを削除（テスト後のクリーンアップ）
+        sqsClient.deleteMessage(DeleteMessageRequest.builder()
+            .queueUrl(queueUrl)
+            .receiptHandle(message.receiptHandle())
+            .build());
+        
+        return message;
+      }
+      
+      TimeUnit.SECONDS.sleep(2);
+    }
+    
+    return null;
+  }
+
+  /**
+   * AWS Signature V4 認証ヘッダー生成（簡易版）
+   */
+  public static String generateAwsAuthHeader(String method, String path, String body, String region) {
+    // 実際の実装では完全なAWS Signature V4を実装する必要がある
+    // テスト環境では簡略化またはIAMロールを使用
+    return "AWS4-HMAC-SHA256 Credential=test/20240101/" + region + "/execute-api/aws4_request, SignedHeaders=host;x-amz-date, Signature=test";
   }
 }

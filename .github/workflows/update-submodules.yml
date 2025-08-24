@@ -14,17 +14,18 @@ jobs:
           submodules: recursive
           token: ${{ secrets.PAT }}
 
-      - name: Update submodules to latest commit
+      - name: Update submodules with unrelated histories
         run: |
-          git submodule update --remote --merge --rebase
+          git submodule update --init --remote
+          git submodule foreach 'git pull origin main --allow-unrelated-histories'
 
       - name: Check for changes
         id: git_status
         run: |
           if [[ -n $(git status --porcelain) ]]; then
-            echo "::set-output name=has_changes::true"
+            echo "has_changes=true" >> $GITHUB_OUTPUT
           else
-            echo "::set-output name=has_changes::false"
+            echo "has_changes=false" >> $GITHUB_OUTPUT
           fi
 
       - name: Commit and push if there are changes

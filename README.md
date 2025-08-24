@@ -11,8 +11,7 @@ kishax/
 │   ├── gather-bot/        # Gather Bot (ECS)
 │   ├── mc-plugins/        # Minecraft プラグイン (Velocity + Spigot)
 │   └── web/               # Web アプリケーション (ECS)
-├── aws/                   # AWS共通リソース・ポリシー
-└── docs/                  # 共通ドキュメント
+└── aws/                   # AWS共通リソース・ポリシー
 ```
 
 ## サービス概要

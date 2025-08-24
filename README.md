@@ -2,7 +2,7 @@
 
 KishaX の統合インフラストラクチャプロジェクト
 
-## プロジェクト構成
+## Tree
 
 ```
 kishax/
@@ -14,7 +14,15 @@ kishax/
 └── aws/                   # AWS共通リソース・ポリシー
 ```
 
-## サービス概要
+## Architecture
+
+```
+[Minecraft Server] → [API Gateway] → [Lambda] → [SQS] → [Discord Bot]
+[Web App] ←→ [RDS PostgreSQL]
+[Gather Bot] → [Slack API]
+```
+
+## Services
 
 このプロジェクトは4つの主要アプリケーションとAWSインフラから構成されています：
 
@@ -23,15 +31,15 @@ kishax/
 - **Minecraft Plugins**: Velocity/Spigotプラグイン (Java)
 - **Web Application**: プレイヤー認証・管理 (Next.js/ECS)
 
-## クイックスタート
+## QuickStart
 
-### 初回セットアップ
+### First Setup
 ```bash
 make setup-first-time
 make setup-prerequisites
 ```
 
-### デプロイ
+### Deploy
 ```bash
 # 全サービスデプロイ
 make deploy-all
@@ -42,27 +50,11 @@ make deploy-gather-bot
 make deploy-web
 ```
 
-### Minecraftプラグインビルド
-```bash
-# プラグイン個別ビルドは apps/mc-plugins/ で実行
-cd apps/mc-plugins
-make build-all
-```
-
-## アーキテクチャ概要
-
-```
-[Minecraft Server] → [API Gateway] → [Lambda] → [SQS] → [Discord Bot]
-[Web App] ←→ [RDS PostgreSQL]
-[Gather Bot] → [Slack API]
-```
-
-## 開発ガイド
+## Dev-Guide
 
 - **AWS インフラ**: [aws/README.md](./aws/README.md)  
 - **デプロイメント**: [aws/DEPLOY.md](./aws/DEPLOY.md)
 
 ---
 
-**最終更新**: 2025-08-21
-**管理者**: Kishax
+**Last Update**: 2025-08-25

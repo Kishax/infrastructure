@@ -59,10 +59,8 @@ make build-all
 
 ## 開発ガイド
 
-- **アプリケーション**: [apps/README.md](./apps/README.md)
 - **AWS インフラ**: [aws/README.md](./aws/README.md)  
 - **デプロイメント**: [aws/DEPLOY.md](./aws/DEPLOY.md)
-- **各サービス詳細**: [apps/*/README.md](./apps/)
 
 ---
 

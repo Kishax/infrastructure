@@ -8,16 +8,15 @@ jobs:
   update-submodules:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository and submodules
+      - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          submodules: recursive
-          token: ${{ secrets.PAT }}
+          token: ${{ secrets.PAT }} # 親リポジトリへのアクセス用
 
-      - name: Update submodules with unrelated histories
+      - name: Update submodules to latest commit
         run: |
-          git submodule update --init --remote
-          git submodule foreach 'git pull origin main --allow-unrelated-histories'
+          # サブモジュールを明示的に認証してクローン
+          git submodule update --init --remote --rebase --recursive
 
       - name: Check for changes
         id: git_status

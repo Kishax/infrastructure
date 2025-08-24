@@ -7,3 +7,6 @@
 [submodule "apps/gather-bot"]
 	path = apps/gather-bot
 	url = https://github.com/Kishax/gather-bot.git
+[submodule "apps/mc-plugins"]
+	path = apps/mc-plugins
+	url = https://github.com/Kishax/kishax.git

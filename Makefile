@@ -390,6 +390,74 @@ test-player-join: ## Player Join 統合テスト実行
 	@echo "🎮 Player Join 統合テスト実行中..."
 	cd aws/integration-test && make test-player-join
 
+.PHONY: test-bidirectional-communication
+test-bidirectional-communication: ## 双方向通信テスト（Web⇔MC）
+	@echo "🔄 双方向通信テスト実行中..."
+	@echo ""
+	@echo "📤 Web → MC 通信テスト:"
+	@curl -X POST "$(API_GATEWAY_URL)/web-to-mc" \
+		-H "Content-Type: application/json" \
+		-d '{"type": "minecraft_web_confirm", "from": "web", "to": "mc", "username": "test_user", "message": "Test message from web to MC"}' \
+		-w "\nHTTP Status: %{http_code}\n" -s | jq . || echo "Response received (not JSON)"
+	@echo ""
+	@echo "📤 MC → Web 通信テスト:"
+	@curl -X POST "$(API_GATEWAY_URL)/mc-to-web" \
+		-H "Content-Type: application/json" \
+		-d '{"type": "auth_response", "from": "mc", "to": "web", "username": "test_user", "success": true, "message": "Test authentication response from MC to web"}' \
+		-w "\nHTTP Status: %{http_code}\n" -s | jq . || echo "Response received (not JSON)"
+	@echo ""
+	@echo "✅ 双方向通信テスト完了"
+
+.PHONY: test-sqs-queues
+test-sqs-queues: ## SQSキュー状態確認
+	@echo "📊 SQS キュー状態確認中..."
+	@echo ""
+	@echo "📋 Web → MC キュー:"
+	@aws sqs get-queue-attributes \
+		--queue-url "https://sqs.$(AWS_REGION).amazonaws.com/$(AWS_ACCOUNT_ID)/kishax-web-to-mc-queue-v2" \
+		--attribute-names ApproximateNumberOfMessages ApproximateNumberOfMessagesNotVisible \
+		--profile $(AWS_PROFILE) \
+		--query 'Attributes.{Messages:ApproximateNumberOfMessages,Processing:ApproximateNumberOfMessagesNotVisible}' \
+		--output table
+	@echo ""
+	@echo "📋 MC → Web キュー:"
+	@aws sqs get-queue-attributes \
+		--queue-url "https://sqs.$(AWS_REGION).amazonaws.com/$(AWS_ACCOUNT_ID)/kishax-mc-to-web-queue-v2" \
+		--attribute-names ApproximateNumberOfMessages ApproximateNumberOfMessagesNotVisible \
+		--profile $(AWS_PROFILE) \
+		--query 'Attributes.{Messages:ApproximateNumberOfMessages,Processing:ApproximateNumberOfMessagesNotVisible}' \
+		--output table
+
+.PHONY: test-aws-sdk-integration
+test-aws-sdk-integration: ## AWS SDK統合テスト実行
+	@echo "🧪 AWS SDK統合テスト実行中..."
+	@cd aws/integration-test && ./gradlew clean test --tests "*ApiGatewayLambdaSqsTest*"
+
+.PHONY: test-bidirectional-aws-sdk
+test-bidirectional-aws-sdk: ## Web⇔MC双方向通信統合テスト（AWS SDK）
+	@echo "🔄 双方向通信統合テスト（AWS SDK）実行中..."
+	@cd aws/integration-test && ./gradlew clean test --tests "*WebMcCommunicationTest*"
+
+.PHONY: test-web-typescript-sdk
+test-web-typescript-sdk: ## Web TypeScript SDK実装テスト
+	@echo "🌐 Web TypeScript SDK実装テスト実行中..."
+	@cd aws/integration-test && ./gradlew clean test --tests "*WebTypescriptSdkTest*"
+
+.PHONY: test-mc-java-sdk
+test-mc-java-sdk: ## MC Plugins Java SDK実装テスト
+	@echo "🎮 MC Plugins Java SDK実装テスト実行中..."
+	@cd aws/integration-test && ./gradlew clean test --tests "*McJavaSdkTest*"
+
+.PHONY: test-language-integration
+test-language-integration: ## 言語間統合テスト（TypeScript⇔Java）
+	@echo "🔗 言語間統合テスト実行中..."
+	@cd aws/integration-test && ./gradlew clean test --tests "*WebTypescriptSdkTest*" --tests "*McJavaSdkTest*"
+
+.PHONY: test-all-aws-integration
+test-all-aws-integration: ## 全AWS統合テスト実行
+	@echo "🚀 全AWS統合テスト実行中..."
+	@cd aws/integration-test && ./gradlew clean test
+
 ## =============================================================================
 ## 監視・デバッグ
 ## =============================================================================

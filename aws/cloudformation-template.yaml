@@ -444,6 +444,13 @@ Resources:
                   - sqs:DeleteMessage
                   - sqs:GetQueueAttributes
                 Resource: !GetAtt DiscordQueue.Arn
+              - Effect: Allow
+                Action:
+                  - sqs:SendMessage
+                  - sqs:GetQueueAttributes
+                Resource: 
+                  - !GetAtt WebToMcQueue.Arn
+                  - !GetAtt McToWebQueue.Arn
         - PolicyName: LogsAccess
           PolicyDocument:
             Version: "2012-10-17"

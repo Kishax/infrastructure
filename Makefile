@@ -390,23 +390,6 @@ test-player-join: ## Player Join 統合テスト実行
 	@echo "🎮 Player Join 統合テスト実行中..."
 	cd aws/integration-test && make test-player-join
 
-.PHONY: test-bidirectional-communication
-test-bidirectional-communication: ## 双方向通信テスト（Web⇔MC）
-	@echo "🔄 双方向通信テスト実行中..."
-	@echo ""
-	@echo "📤 Web → MC 通信テスト:"
-	@curl -X POST "$(API_GATEWAY_URL)/web-to-mc" \
-		-H "Content-Type: application/json" \
-		-d '{"type": "minecraft_web_confirm", "from": "web", "to": "mc", "username": "test_user", "message": "Test message from web to MC"}' \
-		-w "\nHTTP Status: %{http_code}\n" -s | jq . || echo "Response received (not JSON)"
-	@echo ""
-	@echo "📤 MC → Web 通信テスト:"
-	@curl -X POST "$(API_GATEWAY_URL)/mc-to-web" \
-		-H "Content-Type: application/json" \
-		-d '{"type": "auth_response", "from": "mc", "to": "web", "username": "test_user", "success": true, "message": "Test authentication response from MC to web"}' \
-		-w "\nHTTP Status: %{http_code}\n" -s | jq . || echo "Response received (not JSON)"
-	@echo ""
-	@echo "✅ 双方向通信テスト完了"
 
 .PHONY: test-sqs-queues
 test-sqs-queues: ## SQSキュー状態確認

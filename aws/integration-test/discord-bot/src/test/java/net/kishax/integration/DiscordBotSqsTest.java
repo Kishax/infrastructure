@@ -49,7 +49,7 @@ public class DiscordBotSqsTest {
   void setUp() {
     httpClient = ApacheHttpClient.builder().build();
     apiGatewayUrl = TestConfig.getApiGatewayUrl();
-    sqsQueueUrl = TestConfig.SQS_QUEUE_URL;
+    sqsQueueUrl = TestConfig.getSqsQueueUrl();
     discordChannelId = TestConfig.DISCORD_CHANNEL_ID;
 
     logger.info("Test setup - API Gateway URL: {}", apiGatewayUrl);
@@ -59,15 +59,17 @@ public class DiscordBotSqsTest {
 
   @Test
   void shouldSendMessageViaApiGatewayAndReceiveInSqs() throws Exception {
+    final String testId = java.util.UUID.randomUUID().toString();
     // API Gatewayに送信するテストメッセージ作成
-    Map<String, Object> testMessage = Map.of(
+    Map<String, Object> testMessage = new java.util.HashMap<>(Map.of(
         "type", "player_event",
         "eventType", "join",
         "playerName", "DiscordTestPlayer",
         "playerUuid", "test-uuid-basic-12345",
         "serverName", "discord-test-server",
         "timestamp", Instant.now().toString(),
-        "channel_id", discordChannelId);
+        "channel_id", discordChannelId));
+    testMessage.put("testId", testId);
 
     String messageBody = TestUtils.toJson(testMessage);
     logger.info("Sending test message via API Gateway: {}", messageBody);
@@ -86,21 +88,15 @@ public class DiscordBotSqsTest {
 
     logger.info("API Gateway request successful, status: {}", statusCode);
 
-    // SQSメッセージ確認（少し待機してから）
-    TestUtils.waitFor(Duration.ofSeconds(3));
-
-    List<Message> messages = TestUtils.receiveSQSMessages(
-        sqsQueueUrl,
-        10,
-        Duration.ofSeconds(5));
+    // SQSメッセージ確認
+    Message receivedMessage = TestUtils.waitForSpecificMessage(TestConfig.createSqsClient(), sqsQueueUrl, testId, Duration.ofSeconds(10));
 
     // メッセージが受信されたことを確認
-    assertThat(messages)
-        .as("Should receive at least one message from SQS")
-        .isNotEmpty();
+    assertThat(receivedMessage)
+        .as("Should receive the specific message from SQS")
+        .isNotNull();
 
     // メッセージ内容確認
-    Message receivedMessage = messages.get(0);
     Map<String, Object> receivedMessageBody = TestUtils.parseJson(receivedMessage.body());
 
     logger.info("Received SQS message: {}", receivedMessage.body());
@@ -115,40 +111,52 @@ public class DiscordBotSqsTest {
     // Discord Bot処理シミュレーション
     simulateDiscordBotProcessing(receivedMessageBody);
 
-    // テスト後クリーンアップ - メッセージ削除
-    TestUtils.deleteSQSMessage(sqsQueueUrl, receivedMessage.receiptHandle());
+    // テスト後クリーンアップはwaitForSpecificMessage内で行われる
 
     logger.info("Discord Bot complete integration test completed successfully");
   }
 
   @Test
   void shouldHandleMultipleMessageTypesViaApiGateway() throws Exception {
+    final String testIdJoin = java.util.UUID.randomUUID().toString();
+    final String testIdLeave = java.util.UUID.randomUUID().toString();
+    final String testIdStatus = java.util.UUID.randomUUID().toString();
+
     // 複数のDiscordメッセージイベントをAPI Gateway経由でテスト
+    Map<String, Object> joinMessage = new java.util.HashMap<>(Map.of(
+        "type", "player_event",
+        "eventType", "join",
+        "playerName", "TestPlayer1",
+        "playerUuid", "test-uuid-multi-join-12345",
+        "serverName", "test-server",
+        "timestamp", Instant.now().toString(),
+        "channel_id", discordChannelId));
+    joinMessage.put("testId", testIdJoin);
+
+    Map<String, Object> leaveMessage = new java.util.HashMap<>(Map.of(
+        "type", "player_event",
+        "eventType", "leave",
+        "playerName", "TestPlayer2",
+        "playerUuid", "test-uuid-multi-leave-12345",
+        "serverName", "test-server",
+        "timestamp", Instant.now().toString(),
+        "channel_id", discordChannelId));
+    leaveMessage.put("testId", testIdLeave);
+
+    Map<String, Object> statusMessage = new java.util.HashMap<>(Map.of(
+        "type", "server_status",
+        "status", "online",
+        "players", 5,
+        "message", "Server is online with 5 players",
+        "timestamp", Instant.now().toString(),
+        "server", "test-server",
+        "channel_id", discordChannelId));
+    statusMessage.put("testId", testIdStatus);
+
     Map<String, Map<String, Object>> testMessages = Map.of(
-        "player_join", Map.of(
-            "type", "player_event",
-            "eventType", "join",
-            "playerName", "TestPlayer1",
-            "playerUuid", "test-uuid-multi-join-12345",
-            "serverName", "test-server",
-            "timestamp", Instant.now().toString(),
-            "channel_id", discordChannelId),
-        "player_leave", Map.of(
-            "type", "player_event",
-            "eventType", "leave",
-            "playerName", "TestPlayer2",
-            "playerUuid", "test-uuid-multi-leave-12345",
-            "serverName", "test-server",
-            "timestamp", Instant.now().toString(),
-            "channel_id", discordChannelId),
-        "server_status", Map.of(
-            "type", "server_status",
-            "status", "online",
-            "players", 5,
-            "message", "Server is online with 5 players",
-            "timestamp", Instant.now().toString(),
-            "server", "test-server",
-            "channel_id", discordChannelId));
+        "player_join", joinMessage,
+        "player_leave", leaveMessage,
+        "server_status", statusMessage);
 
     // 各メッセージタイプをAPI Gateway経由で送信
     for (Map.Entry<String, Map<String, Object>> entry : testMessages.entrySet()) {
@@ -170,42 +178,36 @@ public class DiscordBotSqsTest {
       TestUtils.waitFor(Duration.ofSeconds(1));
     }
 
-    // すべてのメッセージ送信完了まで少し待機
-    TestUtils.waitFor(Duration.ofSeconds(3));
+    // 各メッセージを受信確認
+    Message joinReceived = TestUtils.waitForSpecificMessage(TestConfig.createSqsClient(), sqsQueueUrl, testIdJoin, Duration.ofSeconds(10));
+    Message leaveReceived = TestUtils.waitForSpecificMessage(TestConfig.createSqsClient(), sqsQueueUrl, testIdLeave, Duration.ofSeconds(10));
+    Message statusReceived = TestUtils.waitForSpecificMessage(TestConfig.createSqsClient(), sqsQueueUrl, testIdStatus, Duration.ofSeconds(10));
 
-    List<Message> messages = TestUtils.receiveSQSMessages(
-        sqsQueueUrl,
-        10,
-        Duration.ofSeconds(10));
+    assertThat(joinReceived).isNotNull();
+    assertThat(leaveReceived).isNotNull();
+    assertThat(statusReceived).isNotNull();
 
-    // メッセージが受信されることを確認（Discord Botが消費している可能性があるため、最低1つ以上）
-    assertThat(messages)
-        .as("Should receive at least one sent message")
-        .hasSizeGreaterThanOrEqualTo(1);
-
-    // 各メッセージを処理・削除
-    for (Message message : messages) {
-      Map<String, Object> messageBody = TestUtils.parseJson(message.body());
-      logger.info("Processing message type: {}", messageBody.get("type"));
-
-      simulateDiscordBotProcessing(messageBody);
-      TestUtils.deleteSQSMessage(sqsQueueUrl, message.receiptHandle());
-    }
+    // 各メッセージを処理
+    simulateDiscordBotProcessing(TestUtils.parseJson(joinReceived.body()));
+    simulateDiscordBotProcessing(TestUtils.parseJson(leaveReceived.body()));
+    simulateDiscordBotProcessing(TestUtils.parseJson(statusReceived.body()));
 
     logger.info("Multiple message types test completed successfully");
   }
 
   @Test
   void shouldSendPlayerLeaveMessageViaApiGateway() throws Exception {
+    final String testId = java.util.UUID.randomUUID().toString();
     // player_event (leave) メッセージを送信
-    Map<String, Object> playerLeaveMessage = Map.of(
+    Map<String, Object> playerLeaveMessage = new java.util.HashMap<>(Map.of(
         "type", "player_event",
         "eventType", "leave",
         "playerName", "TestPlayerLeave",
         "playerUuid", "test-uuid-leave-12345",
         "serverName", "test-server",
         "timestamp", Instant.now().toString(),
-        "channel_id", discordChannelId);
+        "channel_id", discordChannelId));
+    playerLeaveMessage.put("testId", testId);
 
     String messageBody = TestUtils.toJson(playerLeaveMessage);
     logger.info("Sending player_leave message via API Gateway: {}", messageBody);
@@ -224,17 +226,11 @@ public class DiscordBotSqsTest {
 
     logger.info("Player leave message sent successfully to API Gateway");
 
-    // SQSメッセージ確認（少し待機してから）
-    TestUtils.waitFor(Duration.ofSeconds(3));
-
-    List<Message> messages = TestUtils.receiveSQSMessages(
-        sqsQueueUrl,
-        10,
-        Duration.ofSeconds(5));
+    // SQSメッセージ確認
+    Message receivedMessage = TestUtils.waitForSpecificMessage(TestConfig.createSqsClient(), sqsQueueUrl, testId, Duration.ofSeconds(10));
 
     // メッセージが受信された場合の処理
-    if (!messages.isEmpty()) {
-      Message receivedMessage = messages.get(0);
+    if (receivedMessage != null) {
       Map<String, Object> receivedMessageBody = TestUtils.parseJson(receivedMessage.body());
 
       logger.info("Received player_leave SQS message: {}", receivedMessage.body());
@@ -249,8 +245,6 @@ public class DiscordBotSqsTest {
       // Discord Bot処理シミュレーション
       simulateDiscordBotProcessing(receivedMessageBody);
 
-      // テスト後クリーンアップ
-      TestUtils.deleteSQSMessage(sqsQueueUrl, receivedMessage.receiptHandle());
     } else {
       logger.info("No messages received from SQS (likely consumed by Discord Bot service)");
     }
@@ -260,15 +254,17 @@ public class DiscordBotSqsTest {
 
   @Test
   void shouldSendPlayerJoinMessageViaApiGateway() throws Exception {
+    final String testId = java.util.UUID.randomUUID().toString();
     // player_event (join) メッセージを送信
-    Map<String, Object> playerJoinMessage = Map.of(
+    Map<String, Object> playerJoinMessage = new java.util.HashMap<>(Map.of(
         "type", "player_event",
         "eventType", "join",
         "playerName", "TestPlayerJoin",
         "playerUuid", "test-uuid-join-12345",
         "serverName", "test-server",
         "timestamp", Instant.now().toString(),
-        "channel_id", discordChannelId);
+        "channel_id", discordChannelId));
+    playerJoinMessage.put("testId", testId);
 
     String messageBody = TestUtils.toJson(playerJoinMessage);
     logger.info("Sending player_join message via API Gateway: {}", messageBody);
@@ -287,17 +283,11 @@ public class DiscordBotSqsTest {
 
     logger.info("Player join message sent successfully to API Gateway");
 
-    // SQSメッセージ確認（少し待機してから）
-    TestUtils.waitFor(Duration.ofSeconds(3));
-
-    List<Message> messages = TestUtils.receiveSQSMessages(
-        sqsQueueUrl,
-        10,
-        Duration.ofSeconds(5));
+    // SQSメッセージ確認
+    Message receivedMessage = TestUtils.waitForSpecificMessage(TestConfig.createSqsClient(), sqsQueueUrl, testId, Duration.ofSeconds(10));
 
     // メッセージが受信された場合の処理
-    if (!messages.isEmpty()) {
-      Message receivedMessage = messages.get(0);
+    if (receivedMessage != null) {
       Map<String, Object> receivedMessageBody = TestUtils.parseJson(receivedMessage.body());
 
       logger.info("Received player_join SQS message: {}", receivedMessage.body());
@@ -312,8 +302,6 @@ public class DiscordBotSqsTest {
       // Discord Bot処理シミュレーション
       simulateDiscordBotProcessing(receivedMessageBody);
 
-      // テスト後クリーンアップ
-      TestUtils.deleteSQSMessage(sqsQueueUrl, receivedMessage.receiptHandle());
     } else {
       logger.info("No messages received from SQS (likely consumed by Discord Bot service)");
     }

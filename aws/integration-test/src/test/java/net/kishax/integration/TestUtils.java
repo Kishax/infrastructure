@@ -1,6 +1,7 @@
 package net.kishax.integration;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.JsonNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import software.amazon.awssdk.services.apigateway.ApiGatewayClient;
@@ -243,5 +244,128 @@ public class TestUtils {
     // 実際の実装では完全なAWS Signature V4を実装する必要がある
     // テスト環境では簡略化またはIAMロールを使用
     return "AWS4-HMAC-SHA256 Credential=test/20240101/" + region + "/execute-api/aws4_request, SignedHeaders=host;x-amz-date, Signature=test";
+  }
+
+  /**
+   * SQSキューをクリーンアップ
+   */
+  public static void cleanupQueue(SqsClient sqsClient, String queueUrl) {
+    if (queueUrl == null) return;
+    try {
+      while (true) {
+        var response = sqsClient.receiveMessage(builder -> builder
+            .queueUrl(queueUrl)
+            .maxNumberOfMessages(10)
+            .waitTimeSeconds(1));
+        if (response.messages().isEmpty()) {
+          break;
+        }
+        for (var message : response.messages()) {
+          sqsClient.deleteMessage(builder -> builder
+              .queueUrl(queueUrl)
+              .receiptHandle(message.receiptHandle()));
+        }
+      }
+    } catch (Exception e) {
+      logger.warn("Failed to cleanup queue: {}", queueUrl, e);
+    }
+  }
+
+  /**
+   * 複数のSQSキューをクリーンアップ
+   */
+  public static void cleanupSqsQueues(SqsClient sqsClient, String... queueUrls) {
+    try {
+      for (String queueUrl : queueUrls) {
+        cleanupQueue(sqsClient, queueUrl);
+      }
+      Thread.sleep(1000);
+    } catch (Exception e) {
+      logger.warn("Failed to cleanup SQS queues", e);
+    }
+  }
+
+  /**
+   * SSMからSQSキューURLを取得（フォールバック付き）
+   */
+  public static String getSqsUrlFromSsmWithFallback(String parameterName, java.util.function.Supplier<String> fallbackSupplier) {
+    try {
+      return getSSMParameter(parameterName);
+    } catch (Exception e) {
+      logger.warn("Failed to get SQS URL from SSM: {}. Using fallback.", parameterName, e);
+      return fallbackSupplier.get();
+    }
+  }
+
+  /**
+   * 特定のtestIdを持つメッセージのみを受信
+   */
+  public static Message waitForSpecificMessage(SqsClient sqsClient, String queueUrl, String testId, Duration timeout) throws InterruptedException {
+      long timeoutMs = timeout.toMillis();
+      long startTime = System.currentTimeMillis();
+      
+      while (System.currentTimeMillis() - startTime < timeoutMs) {
+          var response = sqsClient.receiveMessage(builder -> builder
+              .queueUrl(queueUrl)
+              .maxNumberOfMessages(10)
+              .waitTimeSeconds(2)
+              .messageAttributeNames("All"));
+          
+          for (var message : response.messages()) {
+              try {
+                  JsonNode messageBody = objectMapper.readTree(message.body());
+                  String messageTestId = messageBody.path("testId").asText();
+                  
+                  if (testId.equals(messageTestId)) {
+                      // 該当メッセージを削除してから返す
+                      sqsClient.deleteMessage(builder -> builder
+                          .queueUrl(queueUrl)
+                          .receiptHandle(message.receiptHandle()));
+                      return message;
+                  } else {
+                      // 他のテスト用メッセージは削除（クリーンアップ）
+                      logger.warn("Skipping message with wrong testId. Expected: {}, Actual: {}. Deleting.", testId, messageTestId);
+                      sqsClient.deleteMessage(builder -> builder
+                          .queueUrl(queueUrl)
+                          .receiptHandle(message.receiptHandle()));
+                  }
+              } catch (Exception e) {
+                  logger.warn("Failed to parse message body while searching for testId", e);
+                  // パースできないメッセージも削除
+                  sqsClient.deleteMessage(builder -> builder
+                      .queueUrl(queueUrl)
+                      .receiptHandle(message.receiptHandle()));
+              }
+          }
+          
+          Thread.sleep(2000);
+      }
+      
+      return null;
+  }
+
+  /**
+   * SQSキューから指定時間すべてのメッセージを受信（非破壊）
+   */
+  public static java.util.List<Message> receiveAllMessages(SqsClient sqsClient, String queueUrl, Duration timeout) throws InterruptedException {
+    java.util.List<Message> allMessages = new java.util.ArrayList<>();
+    long timeoutMs = timeout.toMillis();
+    long startTime = System.currentTimeMillis();
+    
+    while (System.currentTimeMillis() - startTime < timeoutMs) {
+        var response = sqsClient.receiveMessage(builder -> builder
+            .queueUrl(queueUrl)
+            .maxNumberOfMessages(10)
+            .waitTimeSeconds(1)
+            .messageAttributeNames("All"));
+        
+        if (!response.messages().isEmpty()) {
+            allMessages.addAll(response.messages());
+        } else {
+            // キューが空なら少し待つ
+            Thread.sleep(500);
+        }
+    }
+    return allMessages;
   }
 }

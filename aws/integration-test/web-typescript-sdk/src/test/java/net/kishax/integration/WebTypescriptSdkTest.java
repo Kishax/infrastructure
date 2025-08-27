@@ -33,8 +33,8 @@ public class WebTypescriptSdkTest extends BaseIntegrationTest {
         super.setUp(testInfo);
         this.objectMapper = new ObjectMapper();
         
-        // テスト前に徹底的なSQSキューのクリーンアップ
-        cleanupSqsQueuesCompletely();
+        // テスト前にSQSキューのクリーンアップ
+        TestUtils.cleanupSqsQueues(sqsClient, webToMcQueueUrl, mcToWebQueueUrl);
         
         // テスト間の完全分離のための待機
         try {
@@ -43,21 +43,11 @@ public class WebTypescriptSdkTest extends BaseIntegrationTest {
             Thread.currentThread().interrupt();
         }
         
-        try {
-            webToMcQueueUrl = ssmClient.getParameter(builder -> 
-                builder.name("/kishax/sqs/web-to-mc-queue-url")).parameter().value();
-            mcToWebQueueUrl = ssmClient.getParameter(builder -> 
-                builder.name("/kishax/sqs/mc-to-web-queue-url")).parameter().value();
-            
-            logger.info("Web→MC Queue URL: {}", webToMcQueueUrl);
-            logger.info("MC→Web Queue URL: {}", mcToWebQueueUrl);
-        } catch (Exception e) {
-            logger.warn("Failed to get SQS Queue URLs from SSM, using fallback configuration", e);
-            webToMcQueueUrl = String.format("https://sqs.%s.amazonaws.com/%s/kishax-web-to-mc-queue-v2",
-                TestConfig.AWS_REGION.id(), TestConfig.ACCOUNT_ID);
-            mcToWebQueueUrl = String.format("https://sqs.%s.amazonaws.com/%s/kishax-mc-to-web-queue-v2",
-                TestConfig.AWS_REGION.id(), TestConfig.ACCOUNT_ID);
-        }
+        webToMcQueueUrl = TestUtils.getSqsUrlFromSsmWithFallback("/kishax/sqs/web-to-mc-queue-url", TestConfig::getWebToMcSqsQueueUrl);
+        mcToWebQueueUrl = TestUtils.getSqsUrlFromSsmWithFallback("/kishax/sqs/mc-to-web-queue-url", TestConfig::getMcToWebSqsQueueUrl);
+
+        logger.info("Web→MC Queue URL: {}", webToMcQueueUrl);
+        logger.info("MC→Web Queue URL: {}", mcToWebQueueUrl);
     }
 
     /**
@@ -104,7 +94,7 @@ public class WebTypescriptSdkTest extends BaseIntegrationTest {
         assertNotNull(sendResult.messageId());
 
         // SQSメッセージ受信確認（testId属性でフィルタリング、フォールバック付き）
-        Message receivedMessage = waitForSpecificMessage(webToMcQueueUrl, testId, Duration.ofSeconds(30));
+        Message receivedMessage = TestUtils.waitForSpecificMessage(sqsClient, webToMcQueueUrl, testId, Duration.ofSeconds(30));
         if (receivedMessage == null) {
             // フォールバック: testIdなしでも受信を試行
             receivedMessage = TestUtils.waitForSqsMessage(sqsClient, webToMcQueueUrl, Duration.ofSeconds(10));
@@ -170,7 +160,7 @@ public class WebTypescriptSdkTest extends BaseIntegrationTest {
         assertNotNull(sendResult.messageId());
 
         // Web側がポーリング受信することをシミュレート（testId属性でフィルタリング）
-        Message receivedMessage = waitForSpecificMessage(mcToWebQueueUrl, testId, Duration.ofSeconds(30));
+        Message receivedMessage = TestUtils.waitForSpecificMessage(sqsClient, mcToWebQueueUrl, testId, Duration.ofSeconds(30));
         assertNotNull(receivedMessage, "TypeScript受信処理用メッセージが受信されませんでした");
 
         // TypeScript SqsMessageProcessor.processMessage()相当の検証
@@ -231,7 +221,7 @@ public class WebTypescriptSdkTest extends BaseIntegrationTest {
         assertNotNull(sendResult.messageId());
 
         // メッセージ受信確認（testId属性でフィルタリング）
-        Message receivedMessage = waitForSpecificMessage(webToMcQueueUrl, testId, Duration.ofSeconds(30));
+        Message receivedMessage = TestUtils.waitForSpecificMessage(sqsClient, webToMcQueueUrl, testId, Duration.ofSeconds(30));
         assertNotNull(receivedMessage);
 
         // React Hook相当のデータ構造検証
@@ -301,105 +291,8 @@ public class WebTypescriptSdkTest extends BaseIntegrationTest {
     private String generateUniqueTestId(String prefix) {
         return String.format("%s_%d_%d", prefix, System.currentTimeMillis(), System.nanoTime());
     }
+
     
-    /**
-     * 徹底的なSQSキューのクリーンアップ
-     */
-    private void cleanupSqsQueuesCompletely() {
-        try {
-            // 複数回クリーンアップを実行して確実にメッセージを除去
-            for (int i = 0; i < 3; i++) {
-                cleanupQueue(webToMcQueueUrl);
-                cleanupQueue(mcToWebQueueUrl);
-                Thread.sleep(500);
-            }
-            
-            // 最終確認
-            Thread.sleep(1000);
-            logger.info("SQS queues completely cleaned up");
-        } catch (Exception e) {
-            logger.warn("Failed to cleanup SQS queues completely", e);
-        }
-    }
     
-    /**
-     * 特定のtestIdを持つメッセージのみを受信
-     */
-    private Message waitForSpecificMessage(String queueUrl, String testId, Duration timeout) throws InterruptedException {
-        long timeoutMs = timeout.toMillis();
-        long startTime = System.currentTimeMillis();
-        
-        while (System.currentTimeMillis() - startTime < timeoutMs) {
-            var response = sqsClient.receiveMessage(builder -> builder
-                .queueUrl(queueUrl)
-                .maxNumberOfMessages(10)
-                .waitTimeSeconds(2)
-                .messageAttributeNames("All"));
-            
-            for (var message : response.messages()) {
-                try {
-                    JsonNode messageBody = objectMapper.readTree(message.body());
-                    String messageTestId = messageBody.path("testId").asText();
-                    
-                    if (testId.equals(messageTestId)) {
-                        // 該当メッセージを削除してから返す
-                        sqsClient.deleteMessage(builder -> builder
-                            .queueUrl(queueUrl)
-                            .receiptHandle(message.receiptHandle()));
-                        return message;
-                    } else {
-                        // 他のテスト用メッセージは削除（クリーンアップ）
-                        sqsClient.deleteMessage(builder -> builder
-                            .queueUrl(queueUrl)
-                            .receiptHandle(message.receiptHandle()));
-                    }
-                } catch (Exception e) {
-                    logger.warn("Failed to parse message body", e);
-                    // パースできないメッセージも削除
-                    sqsClient.deleteMessage(builder -> builder
-                        .queueUrl(queueUrl)
-                        .receiptHandle(message.receiptHandle()));
-                }
-            }
-            
-            Thread.sleep(2000);
-        }
-        
-        return null;
-    }
     
-    private void cleanupSqsQueues() {
-        try {
-            cleanupQueue(webToMcQueueUrl);
-            cleanupQueue(mcToWebQueueUrl);
-            Thread.sleep(1000);
-        } catch (Exception e) {
-            logger.warn("Failed to cleanup SQS queues", e);
-        }
-    }
-    
-    private void cleanupQueue(String queueUrl) {
-        if (queueUrl == null) return;
-        
-        try {
-            while (true) {
-                var response = sqsClient.receiveMessage(builder -> builder
-                    .queueUrl(queueUrl)
-                    .maxNumberOfMessages(10)
-                    .waitTimeSeconds(1));
-                
-                if (response.messages().isEmpty()) {
-                    break;
-                }
-                
-                for (var message : response.messages()) {
-                    sqsClient.deleteMessage(builder -> builder
-                        .queueUrl(queueUrl)
-                        .receiptHandle(message.receiptHandle()));
-                }
-            }
-        } catch (Exception e) {
-            logger.warn("Failed to cleanup queue: {}", queueUrl, e);
-        }
-    }
 }

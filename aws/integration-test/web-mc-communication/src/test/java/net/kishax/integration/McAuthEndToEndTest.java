@@ -38,18 +38,8 @@ public class McAuthEndToEndTest extends BaseIntegrationTest {
         this.testPlayerUuid = UUID.randomUUID().toString();
         
         // SQSキューURL取得
-        try {
-            webToMcQueueUrl = ssmClient.getParameter(builder -> 
-                builder.name("/kishax/sqs/web-to-mc-queue-url")).parameter().value();
-            mcToWebQueueUrl = ssmClient.getParameter(builder -> 
-                builder.name("/kishax/sqs/mc-to-web-queue-url")).parameter().value();
-        } catch (Exception e) {
-            logger.warn("SSMからSQS URL取得に失敗、フォールバック設定を使用", e);
-            webToMcQueueUrl = String.format("https://sqs.%s.amazonaws.com/%s/kishax-web-to-mc-queue-v2",
-                TestConfig.AWS_REGION.id(), TestConfig.ACCOUNT_ID);
-            mcToWebQueueUrl = String.format("https://sqs.%s.amazonaws.com/%s/kishax-mc-to-web-queue-v2",
-                TestConfig.AWS_REGION.id(), TestConfig.ACCOUNT_ID);
-        }
+        webToMcQueueUrl = TestUtils.getSqsUrlFromSsmWithFallback("/kishax/sqs/web-to-mc-queue-url", TestConfig::getWebToMcSqsQueueUrl);
+        mcToWebQueueUrl = TestUtils.getSqsUrlFromSsmWithFallback("/kishax/sqs/mc-to-web-queue-url", TestConfig::getMcToWebSqsQueueUrl);
         
         logger.info("Test Player: {} ({})", testPlayerName, testPlayerUuid);
     }
@@ -63,15 +53,16 @@ public class McAuthEndToEndTest extends BaseIntegrationTest {
     @Test
     void testCompleteAuthenticationFlow() throws Exception {
         logger.info("Starting complete MC authentication flow test");
+        final String testId = UUID.randomUUID().toString();
 
         // フェーズ1: Web→MC認証確認
         logger.info("Phase 1: Web→MC authentication confirmation");
         
-        Map<String, Object> authRequest = createAuthRequest();
+        Map<String, Object> authRequest = createAuthRequest(testId);
         sendWebToMcMessage(authRequest);
         
         // MC側でメッセージが受信されることを確認
-        Message mcReceivedMessage = waitForSqsMessage(webToMcQueueUrl, Duration.ofSeconds(30));
+        Message mcReceivedMessage = TestUtils.waitForSpecificMessage(sqsClient, webToMcQueueUrl, testId, Duration.ofSeconds(30));
         assertNotNull(mcReceivedMessage, "MC側で認証リクエストが受信されませんでした");
         
         // メッセージ内容検証
@@ -86,11 +77,11 @@ public class McAuthEndToEndTest extends BaseIntegrationTest {
         // フェーズ2: MC→Web認証レスポンス（成功）
         logger.info("Phase 2: MC→Web authentication response (success)");
         
-        Map<String, Object> authResponse = createAuthResponse(true, "認証が正常に完了しました");
+        Map<String, Object> authResponse = createAuthResponse(true, "認証が正常に完了しました", testId);
         sendMcToWebMessage(authResponse);
         
         // Web側でレスポンスが受信されることを確認
-        Message webReceivedMessage = waitForSqsMessage(mcToWebQueueUrl, Duration.ofSeconds(30));
+        Message webReceivedMessage = TestUtils.waitForSpecificMessage(sqsClient, mcToWebQueueUrl, testId, Duration.ofSeconds(30));
         assertNotNull(webReceivedMessage, "Web側で認証レスポンスが受信されませんでした");
         
         // レスポンス内容検証
@@ -130,19 +121,20 @@ public class McAuthEndToEndTest extends BaseIntegrationTest {
     @Test
     void testAuthenticationFailureFlow() throws Exception {
         logger.info("Starting authentication failure flow test");
+        final String testId = UUID.randomUUID().toString();
 
         // 認証リクエスト送信
-        Map<String, Object> authRequest = createAuthRequest();
+        Map<String, Object> authRequest = createAuthRequest(testId);
         sendWebToMcMessage(authRequest);
         
-        Message mcReceivedMessage = waitForSqsMessage(webToMcQueueUrl, Duration.ofSeconds(30));
+        Message mcReceivedMessage = TestUtils.waitForSpecificMessage(sqsClient, webToMcQueueUrl, testId, Duration.ofSeconds(30));
         assertNotNull(mcReceivedMessage);
         
         // 認証失敗レスポンス送信
-        Map<String, Object> authResponse = createAuthResponse(false, "認証に失敗しました: パスワードが一致しません");
+        Map<String, Object> authResponse = createAuthResponse(false, "認証に失敗しました: パスワードが一致しません", testId);
         sendMcToWebMessage(authResponse);
         
-        Message webReceivedMessage = waitForSqsMessage(mcToWebQueueUrl, Duration.ofSeconds(30));
+        Message webReceivedMessage = TestUtils.waitForSpecificMessage(sqsClient, mcToWebQueueUrl, testId, Duration.ofSeconds(30));
         assertNotNull(webReceivedMessage);
         
         // 失敗レスポンス内容検証
@@ -159,12 +151,13 @@ public class McAuthEndToEndTest extends BaseIntegrationTest {
     @Test
     void testAuthenticationTimeoutHandling() throws Exception {
         logger.info("Starting authentication timeout handling test");
+        final String testId = UUID.randomUUID().toString();
 
         // 認証リクエスト送信
-        Map<String, Object> authRequest = createAuthRequest();
+        Map<String, Object> authRequest = createAuthRequest(testId);
         sendWebToMcMessage(authRequest);
         
-        Message mcReceivedMessage = waitForSqsMessage(webToMcQueueUrl, Duration.ofSeconds(30));
+        Message mcReceivedMessage = TestUtils.waitForSpecificMessage(sqsClient, webToMcQueueUrl, testId, Duration.ofSeconds(30));
         assertNotNull(mcReceivedMessage);
         
         // タイムアウトシミュレーション（レスポンス無し状態を維持）
@@ -175,10 +168,10 @@ public class McAuthEndToEndTest extends BaseIntegrationTest {
         Thread.sleep(5000); // 5秒待機
         
         // タイムアウトレスポンス送信（MC側のタイムアウトハンドラーをシミュレート）
-        Map<String, Object> timeoutResponse = createAuthResponse(false, "認証がタイムアウトしました");
+        Map<String, Object> timeoutResponse = createAuthResponse(false, "認証がタイムアウトしました", testId);
         sendMcToWebMessage(timeoutResponse);
         
-        Message timeoutMessage = waitForSqsMessage(mcToWebQueueUrl, Duration.ofSeconds(30));
+        Message timeoutMessage = TestUtils.waitForSpecificMessage(sqsClient, mcToWebQueueUrl, testId, Duration.ofSeconds(30));
         assertNotNull(timeoutMessage);
         
         JsonNode timeoutBody = objectMapper.readTree(timeoutMessage.body());
@@ -197,20 +190,23 @@ public class McAuthEndToEndTest extends BaseIntegrationTest {
 
         int concurrentRequests = 3;
         CountDownLatch latch = new CountDownLatch(concurrentRequests);
+        java.util.List<String> testIds = new java.util.concurrent.CopyOnWriteArrayList<>();
         
         // 複数の認証リクエストを並行送信
         for (int i = 0; i < concurrentRequests; i++) {
             String playerName = "concurrentPlayer" + i;
             String playerUuid = UUID.randomUUID().toString();
+            String testId = UUID.randomUUID().toString();
+            testIds.add(testId);
             
             new Thread(() -> {
                 try {
-                    Map<String, Object> request = createAuthRequest(playerName, playerUuid);
+                    Map<String, Object> request = createAuthRequest(playerName, playerUuid, testId);
                     sendWebToMcMessage(request);
                     
                     // 対応するレスポンス送信
                     Thread.sleep(1000); // 少し待機
-                    Map<String, Object> response = createAuthResponse(playerName, playerUuid, true, "並行認証完了");
+                    Map<String, Object> response = createAuthResponse(playerName, playerUuid, true, "並行認証完了", testId);
                     sendMcToWebMessage(response);
                     
                 } catch (Exception e) {
@@ -221,13 +217,27 @@ public class McAuthEndToEndTest extends BaseIntegrationTest {
             }).start();
         }
         
-        // すべてのリクエストが完了するまで待機
+        // すべてのスレッドが完了するまで待機
         assertTrue(latch.await(60, TimeUnit.SECONDS), "並行認証リクエストがタイムアウトしました");
         
-        // 各レスポンスを受信確認
-        for (int i = 0; i < concurrentRequests; i++) {
-            Message response = waitForSqsMessage(mcToWebQueueUrl, Duration.ofSeconds(10));
-            assertNotNull(response, "並行認証レスポンス " + i + " が受信されませんでした");
+        // 少し待ってからすべてのメッセージを一括受信
+        Thread.sleep(2000);
+        java.util.List<Message> allMessages = TestUtils.receiveAllMessages(sqsClient, mcToWebQueueUrl, Duration.ofSeconds(10));
+        java.util.Set<String> receivedTestIds = new java.util.HashSet<>();
+        for (Message message : allMessages) {
+            try {
+                JsonNode body = objectMapper.readTree(message.body());
+                if (body.has("testId")) {
+                    receivedTestIds.add(body.get("testId").asText());
+                }
+            } catch (Exception e) {
+                logger.warn("Error parsing message in concurrent test", e);
+            }
+        }
+
+        // すべてのtestIdが受信されたか確認
+        for (String sentTestId : testIds) {
+            assertTrue(receivedTestIds.contains(sentTestId), "並行認証レスポンス " + sentTestId + " が受信されませんでした");
         }
         
         logger.info("Concurrent authentication requests test passed");
@@ -239,20 +249,27 @@ public class McAuthEndToEndTest extends BaseIntegrationTest {
         return createAuthRequest(testPlayerName, testPlayerUuid);
     }
 
-    private Map<String, Object> createAuthRequest(String playerName, String playerUuid) {
+    private Map<String, Object> createAuthRequest(String playerName, String playerUuid, String testId) {
         Map<String, Object> request = new HashMap<>();
         request.put("type", "web_mc_auth_confirm");
         request.put("playerName", playerName);
         request.put("playerUuid", playerUuid);
         request.put("timestamp", System.currentTimeMillis());
+        if (testId != null) {
+            request.put("testId", testId);
+        }
         return request;
+    }
+
+    private Map<String, Object> createAuthRequest(String playerName, String playerUuid) {
+        return createAuthRequest(playerName, playerUuid, null);
     }
 
     private Map<String, Object> createAuthResponse(boolean success, String message) {
         return createAuthResponse(testPlayerName, testPlayerUuid, success, message);
     }
 
-    private Map<String, Object> createAuthResponse(String playerName, String playerUuid, boolean success, String message) {
+    private Map<String, Object> createAuthResponse(String playerName, String playerUuid, boolean success, String message, String testId) {
         Map<String, Object> response = new HashMap<>();
         response.put("type", "mc_web_auth_response");
         response.put("playerName", playerName);
@@ -260,7 +277,14 @@ public class McAuthEndToEndTest extends BaseIntegrationTest {
         response.put("success", success);
         response.put("message", message);
         response.put("timestamp", System.currentTimeMillis());
+        if (testId != null) {
+            response.put("testId", testId);
+        }
         return response;
+    }
+
+    private Map<String, Object> createAuthResponse(String playerName, String playerUuid, boolean success, String message) {
+        return createAuthResponse(playerName, playerUuid, success, message, null);
     }
 
     private void sendWebToMcMessage(Map<String, Object> message) throws Exception {
@@ -273,5 +297,17 @@ public class McAuthEndToEndTest extends BaseIntegrationTest {
 
     private Message waitForSqsMessage(String queueUrl, Duration timeout) throws InterruptedException {
         return TestUtils.waitForSqsMessage(sqsClient, queueUrl, timeout);
+    }
+
+    private Map<String, Object> createAuthRequest(String testId) {
+        Map<String, Object> request = createAuthRequest(testPlayerName, testPlayerUuid);
+        request.put("testId", testId);
+        return request;
+    }
+
+    private Map<String, Object> createAuthResponse(boolean success, String message, String testId) {
+        Map<String, Object> response = createAuthResponse(testPlayerName, testPlayerUuid, success, message);
+        response.put("testId", testId);
+        return response;
     }
 }

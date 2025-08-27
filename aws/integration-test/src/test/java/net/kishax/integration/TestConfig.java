@@ -26,15 +26,25 @@ public class TestConfig {
   // API Gateway
   public static final String API_GATEWAY_ID = getEnvValue("AWS_API_GATEWAY_ID");
   public static final String API_GATEWAY_STAGE = getEnvValue("AWS_API_GATEWAY_STAGE");
-  public static final String API_GATEWAY_RESOURCE_PATH = getEnvValue("AWS_API_GATEWAY_RESOURCE_PATH");
 
-  // SQS
-  public static final String SQS_QUEUE_NAME = getEnvValue("AWS_SQS_QUEUE_NAME");
-  public static final String SQS_DLQ_NAME = getEnvValue("AWS_SQS_DLQ_NAME");
+  // 各通信パターン用SQSキュー名
+  public static final String SQS_DISCORD_QUEUE_NAME = getEnvValue("AWS_SQS_DISCORD_QUEUE_NAME");
+  public static final String SQS_MC_TO_WEB_QUEUE_NAME = getEnvValue("AWS_SQS_MC_TO_WEB_QUEUE_NAME");
+  public static final String SQS_WEB_TO_MC_QUEUE_NAME = getEnvValue("AWS_SQS_WEB_TO_MC_QUEUE_NAME");
 
-  // 直接設定値
-  public static final String SQS_QUEUE_URL = getEnvValue("AWS_SQS_QUEUE_URL");
+  // DLQ名
+  public static final String SQS_DISCORD_DLQ_NAME = getEnvValue("AWS_SQS_DISCORD_DLQ_NAME");
+  public static final String SQS_MC_TO_WEB_DLQ_NAME = getEnvValue("AWS_SQS_MC_TO_WEB_DLQ_NAME");
+  public static final String SQS_WEB_TO_MC_DLQ_NAME = getEnvValue("AWS_SQS_WEB_TO_MC_DLQ_NAME");
+
+  // 各通信パターン用API Gatewayリソースパス
+  public static final String API_GATEWAY_DISCORD_RESOURCE_PATH = getEnvValue("AWS_API_GATEWAY_DISCORD_RESOURCE_PATH");
+  public static final String API_GATEWAY_WEB_TO_MC_RESOURCE_PATH = getEnvValue("AWS_API_GATEWAY_WEB_TO_MC_RESOURCE_PATH");
+  public static final String API_GATEWAY_MC_TO_WEB_RESOURCE_PATH = getEnvValue("AWS_API_GATEWAY_MC_TO_WEB_RESOURCE_PATH");
+
+  // Discord設定
   public static final String DISCORD_CHANNEL_ID = getEnvValue("DISCORD_CHANNEL_ID");
+
 
   // AWS Credentials for integration testing
   // Note: これらはDiscordBotSqsTestでSystem.getenvから直接取得されます
@@ -85,18 +95,52 @@ public class TestConfig {
   }
 
   /**
-   * API Gateway エンドポイントURL生成
+   * 通信パターン別API Gateway エンドポイントURL生成
    */
-  public static String getApiGatewayUrl() {
+  public static String getDiscordApiGatewayUrl() {
     return String.format("https://%s.execute-api.%s.amazonaws.com/%s%s",
-        API_GATEWAY_ID, AWS_REGION.id(), API_GATEWAY_STAGE, API_GATEWAY_RESOURCE_PATH);
+        API_GATEWAY_ID, AWS_REGION.id(), API_GATEWAY_STAGE, API_GATEWAY_DISCORD_RESOURCE_PATH);
+  }
+
+  public static String getWebToMcApiGatewayUrl() {
+    return String.format("https://%s.execute-api.%s.amazonaws.com/%s%s",
+        API_GATEWAY_ID, AWS_REGION.id(), API_GATEWAY_STAGE, API_GATEWAY_WEB_TO_MC_RESOURCE_PATH);
+  }
+
+  public static String getMcToWebApiGatewayUrl() {
+    return String.format("https://%s.execute-api.%s.amazonaws.com/%s%s",
+        API_GATEWAY_ID, AWS_REGION.id(), API_GATEWAY_STAGE, API_GATEWAY_MC_TO_WEB_RESOURCE_PATH);
   }
 
   /**
-   * SQS Queue URL生成
+   * 後方互換性のためのメソッド（Discord通信用）
+   */
+  public static String getApiGatewayUrl() {
+    return getDiscordApiGatewayUrl();
+  }
+
+  /**
+   * 通信パターン別SQS Queue URL生成
+   */
+  public static String getDiscordSqsQueueUrl() {
+    return String.format("https://sqs.%s.amazonaws.com/%s/%s",
+        AWS_REGION.id(), ACCOUNT_ID, SQS_DISCORD_QUEUE_NAME);
+  }
+
+  public static String getMcToWebSqsQueueUrl() {
+    return String.format("https://sqs.%s.amazonaws.com/%s/%s",
+        AWS_REGION.id(), ACCOUNT_ID, SQS_MC_TO_WEB_QUEUE_NAME);
+  }
+
+  public static String getWebToMcSqsQueueUrl() {
+    return String.format("https://sqs.%s.amazonaws.com/%s/%s",
+        AWS_REGION.id(), ACCOUNT_ID, SQS_WEB_TO_MC_QUEUE_NAME);
+  }
+
+  /**
+   * 後方互換性のためのメソッド（MC→Web通信用）
    */
   public static String getSqsQueueUrl() {
-    return String.format("https://sqs.%s.amazonaws.com/%s/%s",
-        AWS_REGION.id(), ACCOUNT_ID, SQS_QUEUE_NAME);
+    return getMcToWebSqsQueueUrl();
   }
 }

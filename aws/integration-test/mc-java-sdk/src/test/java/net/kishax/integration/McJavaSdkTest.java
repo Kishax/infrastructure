@@ -43,23 +43,13 @@ public class McJavaSdkTest extends BaseIntegrationTest {
             .build();
         
         // テスト前にSQSキューをクリーンアップ
-        cleanupSqsQueues();
+        TestUtils.cleanupSqsQueues(sqsClient, webToMcQueueUrl, mcToWebQueueUrl);
         
-        try {
-            webToMcQueueUrl = ssmClient.getParameter(builder -> 
-                builder.name("/kishax/sqs/web-to-mc-queue-url")).parameter().value();
-            mcToWebQueueUrl = ssmClient.getParameter(builder -> 
-                builder.name("/kishax/sqs/mc-to-web-queue-url")).parameter().value();
-            
-            logger.info("Web→MC Queue URL: {}", webToMcQueueUrl);
-            logger.info("MC→Web Queue URL: {}", mcToWebQueueUrl);
-        } catch (Exception e) {
-            logger.warn("Failed to get SQS Queue URLs from SSM, using fallback configuration", e);
-            webToMcQueueUrl = String.format("https://sqs.%s.amazonaws.com/%s/kishax-web-to-mc-queue-v2",
-                TestConfig.AWS_REGION.id(), TestConfig.ACCOUNT_ID);
-            mcToWebQueueUrl = String.format("https://sqs.%s.amazonaws.com/%s/kishax-mc-to-web-queue-v2",
-                TestConfig.AWS_REGION.id(), TestConfig.ACCOUNT_ID);
-        }
+        webToMcQueueUrl = TestUtils.getSqsUrlFromSsmWithFallback("/kishax/sqs/web-to-mc-queue-url", TestConfig::getWebToMcSqsQueueUrl);
+        mcToWebQueueUrl = TestUtils.getSqsUrlFromSsmWithFallback("/kishax/sqs/mc-to-web-queue-url", TestConfig::getMcToWebSqsQueueUrl);
+
+        logger.info("Web→MC Queue URL: {}", webToMcQueueUrl);
+        logger.info("MC→Web Queue URL: {}", mcToWebQueueUrl);
     }
 
     /**
@@ -69,9 +59,9 @@ public class McJavaSdkTest extends BaseIntegrationTest {
     @Order(1)
     void testJavaSqsClientSendAuthResponse() throws Exception {
         logger.info("Testing Java SqsClient.sendAuthResponse()");
+        final String testId = generateUniqueTestId("java_auth");
 
         // MC Plugins Java実装と同等のメッセージ構造
-        String testId = generateUniqueTestId("java_auth");
         String uniquePlayerName = "javaAuthPlayer_" + testId;
         String uniquePlayerUuid = "550e8400-e29b-41d4-a716-" + testId;
         
@@ -83,6 +73,7 @@ public class McJavaSdkTest extends BaseIntegrationTest {
         authResponse.put("message", "Java MC認証完了");
         authResponse.put("server", "test-server");
         authResponse.put("timestamp", System.currentTimeMillis());
+        authResponse.put("testId", testId);
 
         // Java SqsClient相当の非同期送信をシミュレート
         String messageBody = objectMapper.writeValueAsString(authResponse);
@@ -116,7 +107,7 @@ public class McJavaSdkTest extends BaseIntegrationTest {
         sendFuture.join(); // 非同期完了を待機
 
         // SQSメッセージ受信確認
-        Message receivedMessage = TestUtils.waitForSqsMessage(sqsClient, mcToWebQueueUrl, Duration.ofSeconds(30));
+        Message receivedMessage = TestUtils.waitForSpecificMessage(sqsClient, mcToWebQueueUrl, testId, Duration.ofSeconds(30));
         assertNotNull(receivedMessage, "Java送信メッセージが受信されませんでした");
 
         // メッセージ内容検証
@@ -142,6 +133,7 @@ public class McJavaSdkTest extends BaseIntegrationTest {
     @Order(2)
     void testJavaWebMcCommunicationManagerReceive() throws Exception {
         logger.info("Testing Java WebMcCommunicationManager message reception");
+        final String testId = generateUniqueTestId("java_receive");
 
         // Web→MCメッセージを受信処理テスト用に送信
         String uniquePlayerName = "javaReceivePlayer_" + System.currentTimeMillis();
@@ -154,6 +146,7 @@ public class McJavaSdkTest extends BaseIntegrationTest {
         webCommand.put("playerName", uniquePlayerName);
         webCommand.put("data", Map.of("server", "lobby"));
         webCommand.put("timestamp", System.currentTimeMillis());
+        webCommand.put("testId", testId);
 
         // Web→MCキューにメッセージを送信
         String messageBody = objectMapper.writeValueAsString(webCommand);
@@ -177,7 +170,7 @@ public class McJavaSdkTest extends BaseIntegrationTest {
         assertNotNull(sendResult.messageId());
 
         // MC側がポーリング受信することをシミュレート
-        Message receivedMessage = TestUtils.waitForSqsMessage(sqsClient, webToMcQueueUrl, Duration.ofSeconds(30));
+        Message receivedMessage = TestUtils.waitForSpecificMessage(sqsClient, webToMcQueueUrl, testId, Duration.ofSeconds(30));
         assertNotNull(receivedMessage, "Java受信処理用メッセージが受信されませんでした");
 
         // Java WebMcCommunicationManager.processMessage()相当の検証
@@ -200,6 +193,7 @@ public class McJavaSdkTest extends BaseIntegrationTest {
     @Order(3)
     void testJavaMinecraftEventHandlerIntegration() throws Exception {
         logger.info("Testing Java Minecraft Event Handler integration");
+        final String testId = generateUniqueTestId("java_event");
 
         // Minecraft PlayerJoinEvent相当のテスト
         String uniquePlayerName = "javaEventPlayer_" + System.currentTimeMillis();
@@ -213,6 +207,7 @@ public class McJavaSdkTest extends BaseIntegrationTest {
         playerJoinEvent.put("status", "online");
         playerJoinEvent.put("serverName", "survival-1");
         playerJoinEvent.put("joinTime", System.currentTimeMillis());
+        playerJoinEvent.put("testId", testId);
 
         // Minecraft イベント処理からのメッセージ送信をシミュレート
         String messageBody = objectMapper.writeValueAsString(playerJoinEvent);
@@ -245,7 +240,7 @@ public class McJavaSdkTest extends BaseIntegrationTest {
         assertNotNull(response.messageId());
 
         // メッセージ受信確認
-        Message receivedMessage = TestUtils.waitForSqsMessage(sqsClient, mcToWebQueueUrl, Duration.ofSeconds(30));
+        Message receivedMessage = TestUtils.waitForSpecificMessage(sqsClient, mcToWebQueueUrl, testId, Duration.ofSeconds(30));
         assertNotNull(receivedMessage);
 
         // Minecraft イベント相当のデータ構造検証
@@ -282,9 +277,10 @@ public class McJavaSdkTest extends BaseIntegrationTest {
                 .build())
             .handle((result, throwable) -> {
                 if (throwable != null) {
-                    String errorMsg = throwable.getMessage();
-                    if (errorMsg.contains("does not exist") || errorMsg.contains("NonExistentQueue") || errorMsg.contains("QueueDoesNotExist")) {
-                        logger.info("Java async error handling verified: {}", errorMsg);
+                    logger.error("Async error occurred in testJavaAsyncErrorHandling", throwable);
+                    Throwable cause = throwable.getCause();
+                    if (cause instanceof software.amazon.awssdk.services.sqs.model.QueueDoesNotExistException) {
+                        logger.info("Java async error handling verified: {}", cause.getMessage());
                         return "error_handled";
                     }
                 }
@@ -326,40 +322,7 @@ public class McJavaSdkTest extends BaseIntegrationTest {
         return String.format("%s_%d_%d", prefix, System.currentTimeMillis(), System.nanoTime());
     }
     
-    private void cleanupSqsQueues() {
-        try {
-            cleanupQueue(webToMcQueueUrl);
-            cleanupQueue(mcToWebQueueUrl);
-            Thread.sleep(1000);
-        } catch (Exception e) {
-            logger.warn("Failed to cleanup SQS queues", e);
-        }
-    }
     
-    private void cleanupQueue(String queueUrl) {
-        if (queueUrl == null) return;
-        
-        try {
-            while (true) {
-                var response = sqsClient.receiveMessage(builder -> builder
-                    .queueUrl(queueUrl)
-                    .maxNumberOfMessages(10)
-                    .waitTimeSeconds(1));
-                
-                if (response.messages().isEmpty()) {
-                    break;
-                }
-                
-                for (var message : response.messages()) {
-                    sqsClient.deleteMessage(builder -> builder
-                        .queueUrl(queueUrl)
-                        .receiptHandle(message.receiptHandle()));
-                }
-            }
-        } catch (Exception e) {
-            logger.warn("Failed to cleanup queue: {}", queueUrl, e);
-        }
-    }
 
     void tearDown() {
         if (sqsAsyncClient != null) {

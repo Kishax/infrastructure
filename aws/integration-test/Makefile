@@ -1,5 +1,7 @@
 # Integration Test Makefile
 
+include .env
+
 .PHONY: help test-integration test-mc-plugins test-api-gateway test-discord-bot test-web test-player-leave test-player-join clean-test setup-test
 
 help: ## 統合テストヘルプを表示
@@ -16,11 +18,10 @@ test-integration: ## 全統合テストを実行
 	@echo "🚀 統合テスト開始..."
 	@echo ""
 	@echo "テスト対象:"
-	@echo "  - mc-plugins: MinecraftプラグインからAPI Gateway"
-	@echo "  - api-gateway: API Gateway → Lambda → SQS"
-	@echo "  - discord-bot: SQS → Discord Bot処理"
-	@echo "  - discord-events: 全Discordメッセージイベント"
-	@echo "  - web: Web アプリケーション認証フロー"
+	@echo "  - mc-discord: MC → Discord通信（API Gateway経由）"
+	@echo "  - mc-web-bidirectional: MC ↔ Web双方向通信（SQS直接）"
+	@echo "  - web-mc-auth: Web → MC認証（API Gateway経由）"
+	@echo "  - legacy: 既存テスト（後方互換性）"
 	@echo ""
 	./gradlew clean integrationTest --info
 	@echo ""
@@ -34,7 +35,11 @@ test-api-gateway: ## API Gateway統合テスト
 	@echo "🌐 API Gateway → Lambda → SQS 統合テスト実行..."
 	./gradlew clean test --tests "*ApiGateway*" --info
 
-test-discord-bot: ## Discord Bot統合テスト  
+test-mc-discord: ## MC→Discord通信統合テスト
+	@echo "🤖 MC→Discord通信統合テスト実行..."
+	./gradlew clean test --tests "*McDiscordCommunication*" --info
+
+test-discord-bot: ## Discord Bot統合テスト（後方互換性）
 	@echo "🤖 Discord Bot SQS処理統合テスト実行..."
 	./gradlew clean test --tests "*DiscordBot*" --info
 
@@ -53,12 +58,32 @@ test-player-join: ## Player Join メッセージ統合テスト
 	@echo "テスト対象: player_join イベント"
 	./gradlew clean test --tests "*shouldSendPlayerJoinMessageViaApiGateway*" --info
 
-test-web: ## Web アプリケーション統合テスト
+test-mc-web-bidirectional: ## MC↔Web双方向通信統合テスト
+	@echo "🔄 MC↔Web双方向通信統合テスト実行..."
+	./gradlew clean test --tests "*McWebBidirectional*" --info
+
+test-web-mc-auth: ## Web→MC認証統合テスト
+	@echo "🔐 Web→MC認証統合テスト実行..."
+	./gradlew clean test --tests "*WebMcAuth*" --info
+
+test-web: ## Web アプリケーション統合テスト（後方互換性）
 	@echo "🌍 Web Application 統合テスト実行..."
 	./gradlew clean test --tests "*Web*" --info
 
 ## =============================================================================
-## 個別コンポーネントテスト
+## 通信パターン別テスト
+## =============================================================================
+
+test-all-communication-patterns: ## 全通信パターンテスト実行
+	@echo "🔄 全通信パターン統合テスト実行..."
+	@echo "実行順序: MC→Discord, MC↔Web, Web→MC"
+	make test-mc-discord
+	make test-mc-web-bidirectional  
+	make test-web-mc-auth
+	@echo "✅ 全通信パターンテスト完了"
+
+## =============================================================================
+## 個別コンポーネントテスト（後方互換性）
 ## =============================================================================
 
 test-full-flow: ## 完全フロー統合テスト（MC → Discord）
@@ -102,24 +127,3 @@ debug-aws: ## AWS接続確認
 	aws sts get-caller-identity --profile $(AWS_PROFILE) || echo "❌ AWS認証に失敗しました"
 	aws apigateway get-rest-api --rest-api-id 043t0plyrl --profile $(AWS_PROFILE) --query '{id:id,name:name}' || echo "❌ API Gateway接続に失敗しました"
 	aws sqs get-queue-attributes --queue-url $(shell aws ssm get-parameter --name "/kishax/sqs/queue-url" --with-decryption --profile $(AWS_PROFILE) --query 'Parameter.Value' --output text) --attribute-names QueueArn --profile $(AWS_PROFILE) || echo "❌ SQS接続に失敗しました"
-
-debug-gradle: ## Gradle設定確認
-	@echo "🔍 Gradle設定確認中..."
-	./gradlew --version
-	./gradlew projects
-	./gradlew dependencies --configuration testRuntimeClasspath | head -20
-
-## =============================================================================
-## 継続的統合
-## =============================================================================
-
-ci-test: setup-test test-integration test-report ## CI用統合テスト実行
-	@echo "🤖 CI統合テスト完了"
-
-validate-infrastructure: ## インフラストラクチャ検証
-	@echo "🏗️ インフラストラクチャ検証中..."
-	@echo "CloudFormation スタック確認..."
-	aws cloudformation describe-stacks --stack-name $(AWS_STACK_NAME) --profile $(AWS_PROFILE) --query 'Stacks[0].StackStatus' --output text
-	@echo "ECS サービス確認..."
-	aws ecs describe-services --cluster $(AWS_CLUSTER_NAME) --services $(AWS_ECS_DISCORD_SERVICE_NAME) $(AWS_ECS_WEB_SERVICE_NAME) --profile $(AWS_PROFILE) --query 'services[*].{ServiceName:serviceName,Status:status,Running:runningCount}' --output table
-	@echo "✅ インフラストラクチャ検証完了"

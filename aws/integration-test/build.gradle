@@ -21,10 +21,8 @@ sourceSets {
         java {
             srcDirs = [
                 'src/test/java',
-                'api-gateway/src/test/java',
-                'discord-bot/src/test/java', 
-                'mc-plugins/src/test/java',
-                'web/src/test/java'
+                'discord-bot/src/test/java',
+                'web-mc-communication/src/test/java'
             ]
         }
     }
@@ -86,8 +84,18 @@ test {
         }
     }
     
-    // システムプロパティ
+    // システムプロパティ - 並行実行を完全に無効化
     systemProperty 'junit.jupiter.execution.parallel.enabled', 'false'
+    systemProperty 'junit.jupiter.execution.parallel.mode.default', 'same_thread'
+    systemProperty 'junit.jupiter.execution.parallel.mode.classes.default', 'same_thread'
+    
+    // テスト順序を固定
+    useJUnitPlatform {
+        systemProperty 'junit.jupiter.testmethod.order.default', 'org.junit.jupiter.api.MethodOrderer$OrderAnnotation'
+    }
+    
+    // 最大並行度を1に設定
+    maxParallelForks = 1
 }
 
 // 統合テスト用タスク

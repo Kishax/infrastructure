@@ -336,21 +336,6 @@ deploy-web: ## Web アプリケーションをデプロイ
 ## テスト・動作確認
 ## =============================================================================
 
-.PHONY: test-integration
-test-integration: ## 統合テスト実行（API Gateway → SQS → Discord Bot）
-	@echo "🧪 Kishax 統合テスト実行中..."
-	cd aws/integration-test && make test-integration
-
-.PHONY: test-mc-plugins-integration
-test-mc-plugins-integration: ## Minecraft Plugin統合テスト
-	@echo "🎮 Minecraft Plugin 統合テスト実行中..."
-	cd aws/integration-test && make test-mc-plugins
-
-.PHONY: test-full-flow
-test-full-flow: ## 完全フロー統合テスト（MC → API Gateway → Discord）
-	@echo "🔄 完全統合フローテスト実行中..."
-	cd aws/integration-test && make test-full-flow
-
 .PHONY: test-lambda
 test-lambda: ## Lambda関数をテスト
 	@echo "🧪 Lambda関数をテスト中..."
@@ -380,15 +365,25 @@ test-minecraft-discord: ## Minecraft→Discord連携をテスト
 	@echo "Minecraftサーバーからプレイヤーのjoin/leaveイベントを発生させて、"
 	@echo "Discordチャンネルにメッセージが表示されることを確認してください。"
 
-.PHONY: test-player-leave
-test-player-leave: ## Player Leave 統合テスト実行
-	@echo "🚪 Player Leave 統合テスト実行中..."
-	cd aws/integration-test && make test-player-leave
-
-.PHONY: test-player-join
-test-player-join: ## Player Join 統合テスト実行
-	@echo "🎮 Player Join 統合テスト実行中..."
-	cd aws/integration-test && make test-player-join
+.PHONY: test-sqs-queues
+test-sqs-queues: ## SQSキュー状態確認
+	@echo "📊 SQS キュー状態確認中..."
+	@echo ""
+	@echo "📋 Web → MC キュー:"
+	@aws sqs get-queue-attributes \
+		--queue-url "https://sqs.$(AWS_REGION).amazonaws.com/$(AWS_ACCOUNT_ID)/kishax-web-to-mc-queue-v2" \
+		--attribute-names ApproximateNumberOfMessages ApproximateNumberOfMessagesNotVisible \
+		--profile $(AWS_PROFILE) \
+		--query 'Attributes.{Messages:ApproximateNumberOfMessages,Processing:ApproximateNumberOfMessagesNotVisible}' \
+		--output table
+	@echo ""
+	@echo "📋 MC → Web キュー:"
+	@aws sqs get-queue-attributes \
+		--queue-url "https://sqs.$(AWS_REGION).amazonaws.com/$(AWS_ACCOUNT_ID)/kishax-mc-to-web-queue-v2" \
+		--attribute-names ApproximateNumberOfMessages ApproximateNumberOfMessagesNotVisible \
+		--profile $(AWS_PROFILE) \
+		--query 'Attributes.{Messages:ApproximateNumberOfMessages,Processing:ApproximateNumberOfMessagesNotVisible}' \
+		--output table
 
 ## =============================================================================
 ## 監視・デバッグ

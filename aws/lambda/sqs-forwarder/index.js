@@ -10,19 +10,32 @@ const ssmClient = new SSMClient({
   region: process.env.AWS_REGION || "ap-northeast-1",
 });
 
-// SSMからSQS_QUEUE_URLを取得する関数
-async function getQueueUrl() {
+// SSMからSQS Queue URLを取得する関数
+async function getQueueUrl(parameterName) {
   try {
     const command = new GetParameterCommand({
-      Name: "/kishax/sqs/queue-url",
+      Name: parameterName,
       WithDecryption: true
     });
     const result = await ssmClient.send(command);
     return result.Parameter.Value;
   } catch (error) {
-    console.error("Failed to get SQS Queue URL from SSM:", error);
+    console.error(`Failed to get SQS Queue URL from SSM (${parameterName}):`, error);
     throw error;
   }
+}
+
+// 各キューのURL取得関数
+async function getDiscordQueueUrl() {
+  return await getQueueUrl("/kishax/sqs/queue-url");
+}
+
+async function getWebToMcQueueUrl() {
+  return await getQueueUrl("/kishax/sqs/web-to-mc-queue-url");
+}
+
+async function getMcToWebQueueUrl() {
+  return await getQueueUrl("/kishax/sqs/mc-to-web-queue-url");
 }
 
 /**
@@ -33,9 +46,33 @@ export const handler = async (event) => {
   console.log("Received event:", JSON.stringify(event, null, 2));
 
   try {
-    // SSMからSQS Queue URLを取得
-    const QUEUE_URL = await getQueueUrl();
-    console.log("SQS Queue URL retrieved:", QUEUE_URL);
+    // リクエストパスからルーティング先を決定
+    const requestPath = event.pathParameters?.proxy || event.requestContext?.resourcePath || '';
+    console.log("Request path:", requestPath);
+    
+    let QUEUE_URL;
+    let messageSource = "unknown";
+    
+    if (requestPath.includes('discord') || requestPath.includes('server-status') || 
+        requestPath.includes('player-request') || requestPath.includes('broadcast')) {
+      // 既存のDiscord Bot向けメッセージ
+      QUEUE_URL = await getDiscordQueueUrl();
+      messageSource = "velocity-plugin";
+    } else if (requestPath.includes('web-to-mc')) {
+      // Web → MC 向けメッセージ
+      QUEUE_URL = await getWebToMcQueueUrl();
+      messageSource = "kishax-web";
+    } else if (requestPath.includes('mc-to-web')) {
+      // MC → Web 向けメッセージ
+      QUEUE_URL = await getMcToWebQueueUrl();
+      messageSource = "mc-plugins";
+    } else {
+      // デフォルトはDiscordキュー
+      QUEUE_URL = await getDiscordQueueUrl();
+      messageSource = "velocity-plugin";
+    }
+    
+    console.log("Selected SQS Queue URL:", QUEUE_URL, "Source:", messageSource);
     
     // リクエストボディを解析
     let requestBody;
@@ -68,7 +105,7 @@ export const handler = async (event) => {
         },
         source: {
           DataType: "String",
-          StringValue: "velocity-plugin",
+          StringValue: messageSource,
         },
         timestamp: {
           DataType: "String",

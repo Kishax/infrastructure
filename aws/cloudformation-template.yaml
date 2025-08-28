@@ -50,6 +50,61 @@ Resources:
         - Key: Component
           Value: DiscordBot
 
+  # Web-MC Communication Queues
+  WebToMcQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: kishax-web-to-mc-queue-v2
+      VisibilityTimeout: 300
+      MessageRetentionPeriod: 1209600 # 14 days
+      ReceiveMessageWaitTimeSeconds: 20
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt WebToMcDeadLetterQueue.Arn
+        maxReceiveCount: 3
+      Tags:
+        - Key: Project
+          Value: Kishax
+        - Key: Component
+          Value: WebMcCommunication
+
+  WebToMcDeadLetterQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: kishax-web-to-mc-dlq-v2
+      MessageRetentionPeriod: 1209600 # 14 days
+      Tags:
+        - Key: Project
+          Value: Kishax
+        - Key: Component
+          Value: WebMcCommunication
+
+  McToWebQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: kishax-mc-to-web-queue-v2
+      VisibilityTimeout: 300
+      MessageRetentionPeriod: 1209600 # 14 days
+      ReceiveMessageWaitTimeSeconds: 20
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt McToWebDeadLetterQueue.Arn
+        maxReceiveCount: 3
+      Tags:
+        - Key: Project
+          Value: Kishax
+        - Key: Component
+          Value: McWebCommunication
+
+  McToWebDeadLetterQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: kishax-mc-to-web-dlq-v2
+      MessageRetentionPeriod: 1209600 # 14 days
+      Tags:
+        - Key: Project
+          Value: Kishax
+        - Key: Component
+          Value: McWebCommunication
+
   # ===========================================
   # SSM Parameters (Note: /kishax/sqs/queue-url already exists)
   # Only update if needed, avoid creating duplicate
@@ -79,7 +134,10 @@ Resources:
               - Effect: Allow
                 Action:
                   - sqs:SendMessage
-                Resource: !GetAtt DiscordQueue.Arn
+                Resource: 
+                  - !GetAtt DiscordQueue.Arn
+                  - !GetAtt WebToMcQueue.Arn
+                  - !GetAtt McToWebQueue.Arn
         - PolicyName: SSMAccessPolicy
           PolicyDocument:
             Version: "2012-10-17"
@@ -87,7 +145,10 @@ Resources:
               - Effect: Allow
                 Action:
                   - ssm:GetParameter
-                Resource: !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/kishax/sqs/queue-url"
+                Resource: 
+                  - !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/kishax/sqs/queue-url"
+                  - !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/kishax/sqs/web-to-mc-queue-url"
+                  - !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/kishax/sqs/mc-to-web-queue-url"
 
   SqsForwarderLambdaFunction:
     Type: AWS::Lambda::Function
@@ -209,6 +270,46 @@ Resources:
         IntegrationHttpMethod: POST
         Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${SqsForwarderLambdaFunction.Arn}/invocations"
 
+  # Web to MC endpoint
+  ApiGatewayWebToMcResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref ApiGateway
+      ParentId: !GetAtt ApiGateway.RootResourceId
+      PathPart: web-to-mc
+
+  ApiGatewayWebToMcMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref ApiGateway
+      ResourceId: !Ref ApiGatewayWebToMcResource
+      HttpMethod: POST
+      AuthorizationType: AWS_IAM
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${SqsForwarderLambdaFunction.Arn}/invocations"
+
+  # MC to Web endpoint
+  ApiGatewayMcToWebResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref ApiGateway
+      ParentId: !GetAtt ApiGateway.RootResourceId
+      PathPart: mc-to-web
+
+  ApiGatewayMcToWebMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref ApiGateway
+      ResourceId: !Ref ApiGatewayMcToWebResource
+      HttpMethod: POST
+      AuthorizationType: AWS_IAM
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${SqsForwarderLambdaFunction.Arn}/invocations"
+
   # Lambda permissions for API Gateway
   LambdaApiGatewayPermission:
     Type: AWS::Lambda::Permission
@@ -226,6 +327,8 @@ Resources:
       - ApiGatewayServerStatusMethod
       - ApiGatewayPlayerRequestMethod
       - ApiGatewayBroadcastMethod
+      - ApiGatewayWebToMcMethod
+      - ApiGatewayMcToWebMethod
     Properties:
       RestApiId: !Ref ApiGateway
       StageName: prod
@@ -341,6 +444,13 @@ Resources:
                   - sqs:DeleteMessage
                   - sqs:GetQueueAttributes
                 Resource: !GetAtt DiscordQueue.Arn
+              - Effect: Allow
+                Action:
+                  - sqs:SendMessage
+                  - sqs:GetQueueAttributes
+                Resource: 
+                  - !GetAtt WebToMcQueue.Arn
+                  - !GetAtt McToWebQueue.Arn
         - PolicyName: LogsAccess
           PolicyDocument:
             Version: "2012-10-17"
@@ -702,6 +812,31 @@ Outputs:
     Value: !GetAtt DiscordQueue.Arn
     Export:
       Name: !Sub "${AWS::StackName}-SqsQueueArn"
+
+  # Web-MC Communication SQS Outputs
+  WebToMcQueueUrl:
+    Description: Web to MC SQS Queue URL
+    Value: !Ref WebToMcQueue
+    Export:
+      Name: !Sub "${AWS::StackName}-WebToMcQueueUrl"
+
+  WebToMcQueueArn:
+    Description: Web to MC SQS Queue ARN
+    Value: !GetAtt WebToMcQueue.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-WebToMcQueueArn"
+
+  McToWebQueueUrl:
+    Description: MC to Web SQS Queue URL
+    Value: !Ref McToWebQueue
+    Export:
+      Name: !Sub "${AWS::StackName}-McToWebQueueUrl"
+
+  McToWebQueueArn:
+    Description: MC to Web SQS Queue ARN
+    Value: !GetAtt McToWebQueue.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-McToWebQueueArn"
 
   # Lambda Outputs
   LambdaFunctionArn:

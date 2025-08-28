@@ -148,5 +148,25 @@
     "Name": "/kishax/web/twitter-client-secret",
     "Value": "YOUR_VALUE_HERE",
     "Type": "SecureString"
+  },
+  {
+    "Name": "/kishax/sqs/web-to-mc-queue-url",
+    "Value": "YOUR_VALUE_HERE",
+    "Type": "String"
+  },
+  {
+    "Name": "/kishax/sqs/mc-to-web-queue-url",
+    "Value": "YOUR_VALUE_HERE",
+    "Type": "String"
+  },
+  {
+    "Name": "/kishax/web/web-to-mc-queue-url",
+    "Value": "YOUR_VALUE_HERE",
+    "Type": "String"
+  },
+  {
+    "Name": "/kishax/web/aws-region",
+    "Value": "YOUR_AWS_REGION",
+    "Type": "String"
   }
 ]

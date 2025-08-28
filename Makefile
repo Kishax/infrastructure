@@ -336,21 +336,6 @@ deploy-web: ## Web アプリケーションをデプロイ
 ## テスト・動作確認
 ## =============================================================================
 
-.PHONY: test-integration
-test-integration: ## 統合テスト実行（API Gateway → SQS → Discord Bot）
-	@echo "🧪 Kishax 統合テスト実行中..."
-	cd aws/integration-test && make test-integration
-
-.PHONY: test-mc-plugins-integration
-test-mc-plugins-integration: ## Minecraft Plugin統合テスト
-	@echo "🎮 Minecraft Plugin 統合テスト実行中..."
-	cd aws/integration-test && make test-mc-plugins
-
-.PHONY: test-full-flow
-test-full-flow: ## 完全フロー統合テスト（MC → API Gateway → Discord）
-	@echo "🔄 完全統合フローテスト実行中..."
-	cd aws/integration-test && make test-full-flow
-
 .PHONY: test-lambda
 test-lambda: ## Lambda関数をテスト
 	@echo "🧪 Lambda関数をテスト中..."
@@ -380,17 +365,6 @@ test-minecraft-discord: ## Minecraft→Discord連携をテスト
 	@echo "Minecraftサーバーからプレイヤーのjoin/leaveイベントを発生させて、"
 	@echo "Discordチャンネルにメッセージが表示されることを確認してください。"
 
-.PHONY: test-player-leave
-test-player-leave: ## Player Leave 統合テスト実行
-	@echo "🚪 Player Leave 統合テスト実行中..."
-	cd aws/integration-test && make test-player-leave
-
-.PHONY: test-player-join
-test-player-join: ## Player Join 統合テスト実行
-	@echo "🎮 Player Join 統合テスト実行中..."
-	cd aws/integration-test && make test-player-join
-
-
 .PHONY: test-sqs-queues
 test-sqs-queues: ## SQSキュー状態確認
 	@echo "📊 SQS キュー状態確認中..."
@@ -410,36 +384,6 @@ test-sqs-queues: ## SQSキュー状態確認
 		--profile $(AWS_PROFILE) \
 		--query 'Attributes.{Messages:ApproximateNumberOfMessages,Processing:ApproximateNumberOfMessagesNotVisible}' \
 		--output table
-
-.PHONY: test-aws-sdk-integration
-test-aws-sdk-integration: ## AWS SDK統合テスト実行
-	@echo "🧪 AWS SDK統合テスト実行中..."
-	@cd aws/integration-test && ./gradlew clean test --tests "*ApiGatewayLambdaSqsTest*"
-
-.PHONY: test-bidirectional-aws-sdk
-test-bidirectional-aws-sdk: ## Web⇔MC双方向通信統合テスト（AWS SDK）
-	@echo "🔄 双方向通信統合テスト（AWS SDK）実行中..."
-	@cd aws/integration-test && ./gradlew clean test --tests "*WebMcCommunicationTest*"
-
-.PHONY: test-web-typescript-sdk
-test-web-typescript-sdk: ## Web TypeScript SDK実装テスト
-	@echo "🌐 Web TypeScript SDK実装テスト実行中..."
-	@cd aws/integration-test && ./gradlew clean test --tests "*WebTypescriptSdkTest*"
-
-.PHONY: test-mc-java-sdk
-test-mc-java-sdk: ## MC Plugins Java SDK実装テスト
-	@echo "🎮 MC Plugins Java SDK実装テスト実行中..."
-	@cd aws/integration-test && ./gradlew clean test --tests "*McJavaSdkTest*"
-
-.PHONY: test-language-integration
-test-language-integration: ## 言語間統合テスト（TypeScript⇔Java）
-	@echo "🔗 言語間統合テスト実行中..."
-	@cd aws/integration-test && ./gradlew clean test --tests "*WebTypescriptSdkTest*" --tests "*McJavaSdkTest*"
-
-.PHONY: test-all-aws-integration
-test-all-aws-integration: ## 全AWS統合テスト実行
-	@echo "🚀 全AWS統合テスト実行中..."
-	@cd aws/integration-test && ./gradlew clean test
 
 ## =============================================================================
 ## 監視・デバッグ

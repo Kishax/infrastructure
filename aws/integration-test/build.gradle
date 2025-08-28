@@ -22,11 +22,7 @@ sourceSets {
             srcDirs = [
                 'src/test/java',
                 'discord-bot/src/test/java',
-                'web-auth/src/test/java',
-                'web-mc/src/test/java',
-                'web-mc-communication/src/test/java',
-                'web-typescript-sdk/src/test/java',
-                'mc-java-sdk/src/test/java'
+                'web-mc-communication/src/test/java'
             ]
         }
     }

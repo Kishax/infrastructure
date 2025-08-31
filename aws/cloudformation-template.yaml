@@ -360,6 +360,7 @@ Resources:
             Action:
               - "sqs:SendMessage"
               - "sqs:ReceiveMessage"
+              - "sqs:DeleteMessage"
             Resource: !GetAtt McToWebQueue.Arn
       Users:
         - !Ref DiscordApiUser

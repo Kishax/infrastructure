@@ -1,6 +1,7 @@
 ### プロジェクト固有 ###
 .env
 .env.backup
+.env.backup.new
 jdt.ls-java-project/
 *~
 experience/

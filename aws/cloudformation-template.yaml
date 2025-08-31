@@ -369,26 +369,6 @@ Resources:
     Properties:
       UserName: !Ref DiscordApiUser
 
-  DiscordApiUserAccessKeyIdSsm:
-    Type: AWS::SSM::Parameter
-    Properties:
-      Name: /kishax/api/discord-api-user-access-key-id
-      Description: "Access key ID for the external Discord API user (managed by CloudFormation)"
-      Type: String
-      Value: !Ref DiscordApiUserAccessKey
-      Tags:
-        Project: Kishax
-
-  DiscordApiUserSecretAccessKeySsm:
-    Type: AWS::SSM::Parameter
-    Properties:
-      Name: /kishax/api/discord-api-user-secret-access-key
-      Description: "Secret access key for the external Discord API user (managed by CloudFormation)"
-      Type: SecureString
-      Value: !GetAtt DiscordApiUserAccessKey.SecretAccessKey
-      Tags:
-        Project: Kishax
-
   # ===========================================
   # ECS Resources (for Discord Bot service)
   # ===========================================

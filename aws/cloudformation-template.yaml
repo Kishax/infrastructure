@@ -346,10 +346,21 @@ Resources:
         - Key: Component
           Value: ExternalAPI
 
+  # MC-Web SQS通信専用ユーザー
+  McWebSqsUser:
+    Type: AWS::IAM::User
+    Properties:
+      UserName: kishax-mc-web-sqs-user
+      Tags:
+        - Key: Project
+          Value: Kishax
+        - Key: Component
+          Value: McWebCommunication
+
   DiscordApiUserPolicy:
     Type: AWS::IAM::Policy
     Properties:
-      PolicyName: KishaxDiscordApiUserPolicy-v2
+      PolicyName: KishaxDiscordApiUserPolicy-v3
       PolicyDocument:
         Version: "2012-10-17"
         Statement:
@@ -358,12 +369,58 @@ Resources:
             Resource: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*/POST/discord"
           - Effect: Allow
             Action:
+              - "sqs:ReceiveMessage"
+              - "sqs:DeleteMessage"
+            Resource: !GetAtt DiscordQueue.Arn
+      Users:
+        - !Ref DiscordApiUser
+
+  # MC-Web SQS通信専用ポリシー
+  McWebSqsUserPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: KishaxMcWebSqsUserPolicy
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action:
               - "sqs:SendMessage"
               - "sqs:ReceiveMessage"
               - "sqs:DeleteMessage"
-            Resource: !GetAtt McToWebQueue.Arn
+            Resource: 
+              - !GetAtt McToWebQueue.Arn
+              - !GetAtt WebToMcQueue.Arn
       Users:
-        - !Ref DiscordApiUser
+        - !Ref McWebSqsUser
+
+  McWebSqsUserAccessKey:
+    Type: AWS::IAM::AccessKey
+    Properties:
+      UserName: !Ref McWebSqsUser
+
+  McWebSqsUserAccessKeyIdSsm:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: /kishax/mc-web-sqs/access-key-id
+      Type: String
+      Value: !Ref McWebSqsUserAccessKey
+      Description: "MC-Web SQS User Access Key ID"
+      Tags:
+        Project: Kishax
+        Component: McWebCommunication
+
+  McWebSqsUserSecretKeySsm:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: /kishax/mc-web-sqs/secret-access-key
+      Type: String
+      DataType: text
+      Value: !GetAtt McWebSqsUserAccessKey.SecretAccessKey
+      Description: "MC-Web SQS User Secret Access Key"
+      Tags:
+        Project: Kishax
+        Component: McWebCommunication
 
   DiscordApiUserAccessKey:
     Type: AWS::IAM::AccessKey
@@ -1003,3 +1060,28 @@ Outputs:
     Value: !Ref DiscordBotTaskDefinition
     Export:
       Name: !Sub "${AWS::StackName}-DiscordBotTaskDefinitionArn"
+
+  # MC-Web SQS User Outputs
+  McWebSqsUserName:
+    Description: MC-Web SQS User Name
+    Value: !Ref McWebSqsUser
+    Export:
+      Name: !Sub "${AWS::StackName}-McWebSqsUserName"
+
+  McWebSqsUserAccessKeyId:
+    Description: MC-Web SQS User Access Key ID
+    Value: !Ref McWebSqsUserAccessKey
+    Export:
+      Name: !Sub "${AWS::StackName}-McWebSqsUserAccessKeyId"
+
+  McWebSqsUserAccessKeyIdSsmPath:
+    Description: SSM Parameter path for MC-Web SQS User Access Key ID
+    Value: !Sub "/kishax/mc-web-sqs/access-key-id"
+    Export:
+      Name: !Sub "${AWS::StackName}-McWebSqsUserAccessKeyIdSsmPath"
+
+  McWebSqsUserSecretKeySsmPath:
+    Description: SSM Parameter path for MC-Web SQS User Secret Access Key
+    Value: !Sub "/kishax/mc-web-sqs/secret-access-key"
+    Export:
+      Name: !Sub "${AWS::StackName}-McWebSqsUserSecretKeySsmPath"

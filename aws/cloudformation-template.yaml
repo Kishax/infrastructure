@@ -134,7 +134,7 @@ Resources:
               - Effect: Allow
                 Action:
                   - sqs:SendMessage
-                Resource: 
+                Resource:
                   - !GetAtt DiscordQueue.Arn
                   - !GetAtt WebToMcQueue.Arn
                   - !GetAtt McToWebQueue.Arn
@@ -145,7 +145,7 @@ Resources:
               - Effect: Allow
                 Action:
                   - ssm:GetParameter
-                Resource: 
+                Resource:
                   - !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/kishax/sqs/queue-url"
                   - !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/kishax/sqs/web-to-mc-queue-url"
                   - !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/kishax/sqs/mc-to-web-queue-url"
@@ -334,6 +334,120 @@ Resources:
       StageName: prod
 
   # ===========================================
+  # IAM User for External API Access
+  # ===========================================
+  DiscordApiUser:
+    Type: AWS::IAM::User
+    Properties:
+      UserName: kishax-discord-api-user
+      Tags:
+        - Key: Project
+          Value: Kishax
+        - Key: Component
+          Value: ExternalAPI
+
+  # MC-Web SQS通信専用ユーザー
+  McWebSqsUser:
+    Type: AWS::IAM::User
+    Properties:
+      UserName: kishax-mc-web-sqs-user
+      Tags:
+        - Key: Project
+          Value: Kishax
+        - Key: Component
+          Value: McWebCommunication
+
+  DiscordApiUserPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: KishaxDiscordApiUserPolicy-v3
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action: "execute-api:Invoke"
+            Resource: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*/POST/discord"
+          - Effect: Allow
+            Action:
+              - "sqs:ReceiveMessage"
+              - "sqs:DeleteMessage"
+            Resource: !GetAtt DiscordQueue.Arn
+      Users:
+        - !Ref DiscordApiUser
+
+  # MC-Web SQS通信専用ポリシー
+  McWebSqsUserPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: KishaxMcWebSqsUserPolicy
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action:
+              - "sqs:SendMessage"
+              - "sqs:ReceiveMessage"
+              - "sqs:DeleteMessage"
+            Resource: 
+              - !GetAtt McToWebQueue.Arn
+              - !GetAtt WebToMcQueue.Arn
+      Users:
+        - !Ref McWebSqsUser
+
+  McWebSqsUserAccessKey:
+    Type: AWS::IAM::AccessKey
+    Properties:
+      UserName: !Ref McWebSqsUser
+
+  McWebSqsUserAccessKeyIdSsm:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: /kishax/mc-web-sqs/access-key-id
+      Type: String
+      Value: !Ref McWebSqsUserAccessKey
+      Description: "MC-Web SQS User Access Key ID"
+      Tags:
+        Project: Kishax
+        Component: McWebCommunication
+
+  McWebSqsUserSecretKeySsm:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: /kishax/mc-web-sqs/secret-access-key
+      Type: String
+      DataType: text
+      Value: !GetAtt McWebSqsUserAccessKey.SecretAccessKey
+      Description: "MC-Web SQS User Secret Access Key"
+      Tags:
+        Project: Kishax
+        Component: McWebCommunication
+
+  DiscordApiUserAccessKey:
+    Type: AWS::IAM::AccessKey
+    Properties:
+      UserName: !Ref DiscordApiUser
+
+  DiscordApiUserAccessKeyIdSsm:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: /kishax/api/discord-api-user-access-key-id
+      Description: "Access key ID for the external Discord API user (managed by CloudFormation)"
+      Type: String
+      Value: !Ref DiscordApiUserAccessKey
+      Tags:
+        Project: Kishax
+
+  DiscordApiUserSecretAccessKeySsm:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: /kishax/api/discord-api-user-secret-access-key
+      Description: "Secret access key for the external Discord API user (managed by CloudFormation)"
+      Type: String
+      Value: !GetAtt DiscordApiUserAccessKey.SecretAccessKey
+      Tags:
+        Project: Kishax
+
+  # ===========================================
   # ECS Resources (for Discord Bot service)
   # ===========================================
   EcsCluster:
@@ -448,7 +562,7 @@ Resources:
                 Action:
                   - sqs:SendMessage
                   - sqs:GetQueueAttributes
-                Resource: 
+                Resource:
                   - !GetAtt WebToMcQueue.Arn
                   - !GetAtt McToWebQueue.Arn
         - PolicyName: LogsAccess
@@ -564,6 +678,14 @@ Resources:
               ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/kishax/web/mc-socket-host"
             - Name: MC_SOCKET_PORT
               ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/kishax/web/mc-socket-port"
+            - Name: MC_WEB_SQS_ACCESS_KEY_ID
+              ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/kishax/web/mc-web-sqs-access-key-id"
+            - Name: MC_WEB_SQS_SECRET_ACCESS_KEY
+              ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/kishax/web/mc-web-sqs-secret-access-key"
+            - Name: WEB_TO_MC_QUEUE_URL
+              ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/kishax/web/web-to-mc-queue-url"
+            - Name: MC_TO_WEB_QUEUE_URL
+              ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/kishax/web/mc-to-web-queue-url"
           LogConfiguration:
             LogDriver: awslogs
             Options:
@@ -712,7 +834,7 @@ Resources:
       ServiceName: kishax-gather-bot-service-v2
       Cluster: !Ref EcsCluster
       TaskDefinition: !Ref GatherBotTaskDefinition
-      DesiredCount: 1
+      DesiredCount: 0 # 一時的に停止
       LaunchType: FARGATE
       NetworkConfiguration:
         AwsvpcConfiguration:
@@ -787,7 +909,7 @@ Resources:
       ServiceName: kishax-discord-bot-service-v2
       Cluster: !Ref EcsCluster
       TaskDefinition: !Ref DiscordBotTaskDefinition
-      DesiredCount: 1
+      DesiredCount: 0 # 一時的に停止
       LaunchType: FARGATE
       NetworkConfiguration:
         AwsvpcConfiguration:
@@ -947,3 +1069,27 @@ Outputs:
     Export:
       Name: !Sub "${AWS::StackName}-DiscordBotTaskDefinitionArn"
 
+  # MC-Web SQS User Outputs
+  McWebSqsUserName:
+    Description: MC-Web SQS User Name
+    Value: !Ref McWebSqsUser
+    Export:
+      Name: !Sub "${AWS::StackName}-McWebSqsUserName"
+
+  McWebSqsUserAccessKeyId:
+    Description: MC-Web SQS User Access Key ID
+    Value: !Ref McWebSqsUserAccessKey
+    Export:
+      Name: !Sub "${AWS::StackName}-McWebSqsUserAccessKeyId"
+
+  McWebSqsUserAccessKeyIdSsmPath:
+    Description: SSM Parameter path for MC-Web SQS User Access Key ID
+    Value: !Sub "/kishax/mc-web-sqs/access-key-id"
+    Export:
+      Name: !Sub "${AWS::StackName}-McWebSqsUserAccessKeyIdSsmPath"
+
+  McWebSqsUserSecretKeySsmPath:
+    Description: SSM Parameter path for MC-Web SQS User Secret Access Key
+    Value: !Sub "/kishax/mc-web-sqs/secret-access-key"
+    Export:
+      Name: !Sub "${AWS::StackName}-McWebSqsUserSecretKeySsmPath"

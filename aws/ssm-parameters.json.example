@@ -168,5 +168,20 @@
     "Name": "/kishax/web/aws-region",
     "Value": "YOUR_AWS_REGION",
     "Type": "String"
+  },
+  {
+    "Name": "/kishax/web/mc-web-sqs-access-key-id",
+    "Value": "YOUR_VALUE_HERE",
+    "Type": "SecureString"
+  },
+  {
+    "Name": "/kishax/web/mc-web-sqs-secret-access-key",
+    "Value": "YOUR_VALUE_HERE",
+    "Type": "SecureString"
+  },
+  {
+    "Name": "/kishax/web/mc-to-web-queue-url",
+    "Value": "YOUR_VALUE_HERE",
+    "Type": "String"
   }
 ]

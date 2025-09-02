@@ -4,6 +4,8 @@ KishaX の統合インフラストラクチャプロジェクト
 
 ## Architecture
 
+<img width="2652" height="3200" alt="インフラ図" src="https://github.com/user-attachments/assets/50212a8a-7387-4234-b2c8-6c9672f070c3" />
+
 ```
   ┌─────────────┐    ┌──────────────┐    ┌─────────────────────┐
   │ Discord Bot │←───│ SQS Discord  │←───│   API Gateway       │

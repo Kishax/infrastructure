@@ -10,3 +10,6 @@
 [submodule "apps/mc-plugins"]
 	path = apps/mc-plugins
 	url = https://github.com/Kishax/kishax.git
+[submodule "apps/kishax-auth"]
+	path = apps/kishax-auth
+	url = https://github.com/Kishax/kishax-auth

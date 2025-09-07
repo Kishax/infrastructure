@@ -183,5 +183,50 @@
     "Name": "/kishax/web/mc-to-web-queue-url",
     "Value": "YOUR_VALUE_HERE",
     "Type": "String"
+  },
+  {
+    "Name": "/kishax/oauth/github-client-id",
+    "Value": "YOUR_GITHUB_CLIENT_ID",
+    "Type": "SecureString"
+  },
+  {
+    "Name": "/kishax/oauth/github-client-secret",
+    "Value": "YOUR_GITHUB_CLIENT_SECRET",
+    "Type": "SecureString"
+  },
+  {
+    "Name": "/kishax/auth/keycloak-database-url",
+    "Value": "jdbc:postgresql://your-rds-host:5432/keycloak",
+    "Type": "SecureString"
+  },
+  {
+    "Name": "/kishax/auth/keycloak-database-username",
+    "Value": "YOUR_DB_USERNAME",
+    "Type": "SecureString"
+  },
+  {
+    "Name": "/kishax/auth/keycloak-database-password",
+    "Value": "YOUR_DB_PASSWORD",
+    "Type": "SecureString"
+  },
+  {
+    "Name": "/kishax/auth/keycloak-admin",
+    "Value": "admin",
+    "Type": "SecureString"
+  },
+  {
+    "Name": "/kishax/auth/keycloak-admin-password",
+    "Value": "YOUR_ADMIN_PASSWORD",
+    "Type": "SecureString"
+  },
+  {
+    "Name": "/kishax/auth/iam-identity-center-acs-url",
+    "Value": "YOUR_IAM_IDENTITY_CENTER_ACS_URL",
+    "Type": "SecureString"
+  },
+  {
+    "Name": "/kishax/auth/iam-identity-center-issuer-url",
+    "Value": "YOUR_IAM_IDENTITY_CENTER_ISSUER_URL",
+    "Type": "SecureString"
   }
 ]

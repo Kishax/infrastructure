@@ -388,7 +388,7 @@ Resources:
               - "sqs:SendMessage"
               - "sqs:ReceiveMessage"
               - "sqs:DeleteMessage"
-            Resource: 
+            Resource:
               - !GetAtt McToWebQueue.Arn
               - !GetAtt WebToMcQueue.Arn
       Users:
@@ -496,6 +496,11 @@ Resources:
           ToPort: 3000
           SourceSecurityGroupId: !Ref AlbSecurityGroup
           Description: Allow traffic from ALB to ECS tasks
+        - IpProtocol: tcp
+          FromPort: 9000
+          ToPort: 9000
+          SourceSecurityGroupId: !Ref AlbSecurityGroup
+          Description: Allow health checks from ALB to ECS management interface
       SecurityGroupEgress:
         - IpProtocol: -1
           CidrIp: 0.0.0.0/0
@@ -534,6 +539,9 @@ Resources:
                   - !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/kishax/web/*"
                   - !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/kishax/gather/*"
                   - !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/kishax/slack/*"
+                  - !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/kishax/auth/*"
+                  - !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/kishax/oauth/*"
+                  - !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/kishax/cognito/*"
 
   # Task Role (for Discord Bot application)
   EcsTaskRole:
@@ -609,6 +617,15 @@ Resources:
     Type: AWS::Logs::LogGroup
     Properties:
       LogGroupName: /ecs/kishax-gather-bot-v2
+      RetentionInDays: 30
+      Tags:
+        - Key: Project
+          Value: Kishax
+
+  AuthLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: /ecs/kishax-auth-v2
       RetentionInDays: 30
       Tags:
         - Key: Project
@@ -705,7 +722,7 @@ Resources:
       ServiceName: kishax-web-service-v2
       Cluster: !Ref EcsCluster
       TaskDefinition: !Ref WebTaskDefinition
-      DesiredCount: 1
+      DesiredCount: 0 # 一時的に停止
       LaunchType: FARGATE
       NetworkConfiguration:
         AwsvpcConfiguration:
@@ -774,6 +791,29 @@ Resources:
             Query: "#{query}"
             StatusCode: HTTP_301
 
+  AuthTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: kishax-auth-tg-v2
+      Port: 3000
+      Protocol: HTTP
+      TargetType: ip
+      VpcId: !Ref VpcId
+      HealthCheckPath: /health/ready
+      HealthCheckProtocol: HTTP
+      HealthCheckPort: 9000
+      HealthCheckIntervalSeconds: 30
+      HealthCheckTimeoutSeconds: 5
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 3
+      Matcher:
+        HttpCode: "200"
+      Tags:
+        - Key: Project
+          Value: Kishax
+        - Key: Component
+          Value: Auth
+
   HttpsListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
     Properties:
@@ -786,6 +826,131 @@ Resources:
       DefaultActions:
         - Type: forward
           TargetGroupArn: !Ref WebTargetGroup
+
+  AuthListenerRule:
+    Type: AWS::ElasticLoadBalancingV2::ListenerRule
+    Properties:
+      ListenerArn: !Ref HttpsListener
+      Priority: 100
+      Conditions:
+        - Field: host-header
+          Values:
+            - $(AUTH_SERVICE_DOMAIN)
+      Actions:
+        - Type: forward
+          TargetGroupArn: !Ref AuthTargetGroup
+
+  # ===========================================
+  # Auth ECS Resources (Keycloak)
+  # ===========================================
+  AuthTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: kishax-auth-v2
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+        - FARGATE
+      Cpu: 512
+      Memory: 1024
+      ExecutionRoleArn: !GetAtt EcsTaskExecutionRole.Arn
+      TaskRoleArn: !GetAtt EcsTaskRole.Arn
+      ContainerDefinitions:
+        - Name: kishax-auth
+          Image: !Sub "${AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/kishax-auth:latest"
+          PortMappings:
+            - ContainerPort: 3000
+              Protocol: tcp
+            - ContainerPort: 9000
+              Protocol: tcp
+          Environment:
+            - Name: KC_FEATURES
+              Value: "token-exchange,admin-fine-grained-authz"
+            - Name: KC_HTTP_PORT
+              Value: "3000"
+            - Name: KC_HTTP_ENABLED
+              Value: "true"
+            - Name: KC_HOSTNAME
+              Value: "auth.kishax.net"
+            - Name: KC_HOSTNAME_ADMIN_URL
+              Value: "https://auth.kishax.net"
+            - Name: KC_PROXY
+              Value: "edge"
+            - Name: KC_HOSTNAME_STRICT
+              Value: "false"
+            - Name: KC_HOSTNAME_STRICT_HTTPS
+              Value: "false"
+            - Name: KC_DB
+              Value: "postgres"
+            - Name: KC_LOG_LEVEL
+              Value: "INFO"
+            - Name: KC_HEALTH_ENABLED
+              Value: "true"
+            - Name: KC_METRICS_ENABLED
+              Value: "true"
+            - Name: AWS_REGION
+              Value: !Ref AWS::Region
+            - Name: AWS_ACCOUNT_ID
+              Value: !Ref AccountId
+            - Name: KC_LOG_LEVEL
+              Value: "INFO"
+          Secrets:
+            - Name: KEYCLOAK_ADMIN
+              ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/kishax/auth/keycloak-admin"
+            - Name: KEYCLOAK_ADMIN_PASSWORD
+              ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/kishax/auth/keycloak-admin-password"
+            - Name: KC_DB_URL
+              ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/kishax/auth/keycloak-database-url"
+            - Name: KC_DB_USERNAME
+              ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/kishax/auth/keycloak-database-username"
+            - Name: KC_DB_PASSWORD
+              ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/kishax/auth/keycloak-database-password"
+            - Name: GITHUB_CLIENT_ID
+              ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/kishax/oauth/github-client-id"
+            - Name: GITHUB_CLIENT_SECRET
+              ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/kishax/oauth/github-client-secret"
+            - Name: IAM_IDENTITY_CENTER_ACS_URL
+              ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/kishax/auth/iam-identity-center-acs-url"
+            - Name: IAM_IDENTITY_CENTER_ISSUER_URL
+              ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/kishax/auth/iam-identity-center-issuer-url"
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref AuthLogGroup
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: ecs
+      Tags:
+        - Key: Project
+          Value: Kishax
+        - Key: Component
+          Value: Auth
+
+  AuthService:
+    Type: AWS::ECS::Service
+    DependsOn:
+      - AuthTargetGroup
+      - AuthListenerRule
+    Properties:
+      ServiceName: kishax-auth-service-v2
+      Cluster: !Ref EcsCluster
+      TaskDefinition: !Ref AuthTaskDefinition
+      DesiredCount: 1
+      LaunchType: FARGATE
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          SecurityGroups:
+            - !Ref EcsSecurityGroup
+          Subnets: !Ref PublicSubnetIds
+          AssignPublicIp: ENABLED
+      LoadBalancers:
+        - ContainerName: kishax-auth
+          ContainerPort: 3000
+          TargetGroupArn: !Ref AuthTargetGroup
+      HealthCheckGracePeriodSeconds: 300
+      Tags:
+        - Key: Project
+          Value: Kishax
+        - Key: Component
+          Value: Auth
 
   # ===========================================
   # Gather Bot ECS Resources
@@ -920,6 +1085,153 @@ Resources:
       Tags:
         - Key: Project
           Value: Kishax
+
+  # ===========================================
+  # Cognito Resources for IAM Identity Center Integration - DISABLED for direct Keycloak-IAM integration
+  # ===========================================
+  # CognitoUserPool - DISABLED for direct Keycloak-IAM integration
+  # CognitoUserPool:
+  #   Type: AWS::Cognito::UserPool
+  #   Properties:
+  #     UserPoolName: kishax-auth-user-pool
+  #     AutoVerifiedAttributes:
+  #       - email
+  #     Schema:
+  #       - Name: email
+  #         AttributeDataType: String
+  #         Required: true
+  #         Mutable: true
+  #       - Name: given_name
+  #         AttributeDataType: String
+  #         Required: false
+  #         Mutable: true
+  #       - Name: family_name
+  #         AttributeDataType: String
+  #         Required: false
+  #         Mutable: true
+  #     Policies:
+  #       PasswordPolicy:
+  #         MinimumLength: 8
+  #         RequireUppercase: false
+  #         RequireLowercase: false
+  #         RequireNumbers: false
+  #         RequireSymbols: false
+  #     AdminCreateUserConfig:
+  #       AllowAdminCreateUserOnly: false
+  #       UnusedAccountValidityDays: 7
+  #     UserPoolTags:
+  #       Project: Kishax
+  #       Component: Auth
+  #
+  # CognitoUserPoolDomain:
+  #   Type: AWS::Cognito::UserPoolDomain
+  #   Properties:
+  #     UserPoolId: !Ref CognitoUserPool
+  #     Domain: !Sub "kishax-auth-${AccountId}"
+  #
+  # # OIDC Identity Provider (Keycloak) - DISABLED
+  # CognitoIdentityProvider:
+  #   Type: AWS::Cognito::UserPoolIdentityProvider
+  #   Properties:
+  #     UserPoolId: !Ref CognitoUserPool
+  #     ProviderName: Keycloak
+  #     ProviderType: OIDC
+  #     ProviderDetails:
+  #       client_id: kishax-cognito-client
+  #       client_secret: $(COGNITO_OIDC_CLIENT_SECRET)
+  #       authorize_scopes: "openid email profile"
+  #       attributes_request_method: GET
+  #       oidc_issuer: https://auth.kishax.net/realms/kishax
+  #     AttributeMapping:
+  #       email: email
+  #       preferred_username: preferred_username
+  #
+  # # User Pool Client for IAM Identity Center - DISABLED
+  # CognitoUserPoolClient:
+  #   Type: AWS::Cognito::UserPoolClient
+  #   DependsOn: CognitoIdentityProvider
+  #   Properties:
+  #     UserPoolId: !Ref CognitoUserPool
+  #     ClientName: kishax-identity-center-client
+  #     GenerateSecret: true
+  #     ExplicitAuthFlows:
+  #       - ADMIN_NO_SRP_AUTH
+  #       - USER_PASSWORD_AUTH
+  #     SupportedIdentityProviders:
+  #       - Keycloak
+  #       - COGNITO
+  #     CallbackURLs:
+  #       - $(COGNITO_CALLBACK_URL)
+  #     LogoutURLs:
+  #       - $(COGNITO_LOGOUT_URL)
+  #     AllowedOAuthFlows:
+  #       - code
+  #     AllowedOAuthScopes:
+  #       - openid
+  #       - email
+  #       - profile
+  #     AllowedOAuthFlowsUserPoolClient: true
+  #
+  # # Identity Pool for SAML - DISABLED
+  # CognitoIdentityPool:
+  #   Type: AWS::Cognito::IdentityPool
+  #   Properties:
+  #     IdentityPoolName: kishax-auth-identity-pool
+  #     AllowUnauthenticatedIdentities: false
+  #     CognitoIdentityProviders:
+  #       - ClientId: !Ref CognitoUserPoolClient
+  #         ProviderName: !GetAtt CognitoUserPool.ProviderName
+  #         ServerSideTokenCheck: true
+  #
+  # # IAM Roles for Identity Pool - DISABLED
+  # CognitoAuthRole:
+  #   Type: AWS::IAM::Role
+  #   Properties:
+  #     RoleName: kishax-cognito-auth-role
+  #     AssumeRolePolicyDocument:
+  #       Version: "2012-10-17"
+  #       Statement:
+  #         - Effect: Allow
+  #           Principal:
+  #             Federated: cognito-identity.amazonaws.com
+  #           Action: sts:AssumeRoleWithWebIdentity
+  #           Condition:
+  #             StringEquals:
+  #               "cognito-identity.amazonaws.com:aud": !Ref CognitoIdentityPool
+  #             "ForAnyValue:StringLike":
+  #               "cognito-identity.amazonaws.com:amr": authenticated
+  #     Tags:
+  #       - Key: Project
+  #         Value: Kishax
+  #
+  # CognitoUnauthRole:
+  #   Type: AWS::IAM::Role
+  #   Properties:
+  #     RoleName: kishax-cognito-unauth-role
+  #     AssumeRolePolicyDocument:
+  #       Version: "2012-10-17"
+  #       Statement:
+  #         - Effect: Allow
+  #           Principal:
+  #             Federated: cognito-identity.amazonaws.com
+  #           Action: sts:AssumeRoleWithWebIdentity
+  #           Condition:
+  #             StringEquals:
+  #               "cognito-identity.amazonaws.com:aud": !Ref CognitoIdentityPool
+  #             "ForAnyValue:StringLike":
+  #               "cognito-identity.amazonaws.com:amr": unauthenticated
+  #     Tags:
+  #       - Key: Project
+  #         Value: Kishax
+  #
+  # # Identity Pool Role Attachment - DISABLED
+  # CognitoIdentityPoolRoleAttachment:
+  #   Type: AWS::Cognito::IdentityPoolRoleAttachment
+  #   Properties:
+  #     IdentityPoolId: !Ref CognitoIdentityPool
+  #     Roles:
+  #       authenticated: !GetAtt CognitoAuthRole.Arn
+  #       unauthenticated: !GetAtt CognitoUnauthRole.Arn
 
 Outputs:
   # SQS Outputs

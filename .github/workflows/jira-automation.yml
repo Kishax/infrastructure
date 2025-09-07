@@ -98,7 +98,7 @@ jobs:
               repo: context.repo.repo,
               issue_number: context.issue.number
             });
-            
+
             // まず、github-actions botの自動作成コメントを優先検索
             for (const comment of comments.data) {
               // github-actions botのコメントをチェック
@@ -112,7 +112,7 @@ jobs:
                 }
               }
             }
-            
+
             // bot自動コメントで見つからない場合は、全コメントから一般的なJira keyを検索
             const issueKeyPattern = /([A-Z]+-\d+)/g;
             for (const comment of comments.data) {
@@ -122,7 +122,7 @@ jobs:
                 return matches[0];
               }
             }
-            
+
             console.log('No issue key found in PR comments');
             return null;
           result-encoding: string
@@ -141,7 +141,7 @@ jobs:
           elif [ "${{ steps.find_issue_in_comments.outputs.result }}" != "null" ] && [ "${{ steps.find_issue_in_comments.outputs.result }}" != "" ]; then
             ISSUE_KEY="${{ steps.find_issue_in_comments.outputs.result }}"
           fi
-          
+
           if [ -n "$ISSUE_KEY" ]; then
             echo "Jira Issue Key: $ISSUE_KEY"
             echo "issue_key=$ISSUE_KEY" >> $GITHUB_OUTPUT
@@ -237,3 +237,4 @@ jobs:
         with:
           issue: ${{ steps.set_issue_key.outputs.issue_key }}
           transition: "完了"
+

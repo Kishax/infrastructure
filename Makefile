@@ -376,7 +376,7 @@ deploy-web: ## Web アプリケーションをデプロイ
 .PHONY: deploy-auth
 deploy-auth: ## Auth サービスをデプロイ
 	@echo "🚀 Auth サービスをデプロイ中..."
-	cd apps/kishax-authx && \
+	cd apps/kishax-auth && \
 	docker buildx build --platform linux/amd64 -t kishax-auth . && \
 	aws ecr get-login-password --region $(AWS_REGION) --profile $(AWS_PROFILE) | \
 		docker login --username AWS --password-stdin $(AWS_ECR_AUTH) && \

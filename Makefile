@@ -25,6 +25,41 @@ sync: ## Gitサブモジュールを最新に同期
 	git submodule update --remote --merge
 
 ## =============================================================================
+## その他
+## =============================================================================
+.PHONY: test-auth
+test-auth:
+	curl -s -o /dev/null -w "%{http_code}\n" "https://auth.kishax.net"
+
+## =============================================================================
+## ログイン
+## =============================================================================
+.PHONY: login
+login: ## AWS SSOログイン
+	@echo "🔐 AWS SSOログイン中..."
+	aws sso login --profile $(AWS_PROFILE)
+
+## =============================================================================
+## RDS
+## =============================================================================
+.PHONY: rds-connect
+rds-connect: ## RDSに接続 (psql)
+	@echo "🔗 RDSに接続中..."
+	aws ssm start-session \
+		--target "$(AWS_RDS_JUMP_EC2_INSTANCE_ID)" \
+		--document-name AWS-StartPortForwardingSessionToRemoteHost \
+		--parameters '{ "portNumber":["5432"], "localPortNumber":["5433"], "host":["$(AWS_RDS_HOST)"] }' \
+		--profile $(AWS_PROFILE)
+
+.PHONY: rds-reset-auth
+rds-reset-auth:
+	@echo "🔄 RDSのkeycloakデータベースをリセット中..."
+	export PGPASSWORD=$(AWS_RDS_MASTER_PASSWORD) && \
+	psql -h localhost -p 5433 -U postgres -c "SELECT pg_terminate_backend(pg_stat_activity.pid) FROM pg_stat_activity WHERE pg_stat_activity.datname = 'keycloak' AND pid <> pg_backend_pid();" && \
+	psql -h localhost -p 5433 -U postgres -c "DROP DATABASE keycloak;" && \
+	psql -h localhost -p 5433 -U postgres -c "CREATE DATABASE keycloak;"
+
+## =============================================================================
 ## 監視・ステータス確認
 ## =============================================================================
 
@@ -388,6 +423,38 @@ deploy-auth: ## Auth サービスをデプロイ
 		--force-new-deployment \
 		--profile $(AWS_PROFILE)
 	@echo "✅ Auth サービスのデプロイが完了しました"
+
+## =============================================================================
+## SAML・認証関連
+## =============================================================================
+
+.PHONY: download-saml-metadata
+download-saml-metadata: ## Keycloak SAML metadataをダウンロード
+	@echo "📥 Keycloak SAML metadataをダウンロード中..."
+	@echo "🌐 本番環境 (https://auth.kishax.net):"
+	@curl -s "https://auth.kishax.net/realms/kishax/protocol/saml/descriptor" \
+		-o /tmp/keycloak-saml-metadata-prod.xml && \
+	echo "✅ 本番環境のmetadataを /tmp/keycloak-saml-metadata-prod.xml に保存しました" || \
+	echo "❌ 本番環境のmetadata取得に失敗しました"
+	@echo ""
+	@echo "🖥️  ローカル環境 (http://localhost:3000):"
+	@curl -s "http://localhost:3000/realms/kishax/protocol/saml/descriptor" \
+		-o /tmp/keycloak-saml-metadata-local.xml && \
+	echo "✅ ローカル環境のmetadataを /tmp/keycloak-saml-metadata-local.xml に保存しました" || \
+	echo "❌ ローカル環境のmetadata取得に失敗しました (サービスが起動していない可能性があります)"
+
+.PHONY: validate-saml-metadata
+validate-saml-metadata: ## ダウンロードしたSAML metadataの内容を確認
+	@echo "🔍 SAML metadataの内容確認..."
+	@if [ -f /tmp/keycloak-saml-metadata-prod.xml ]; then \
+		echo "📄 本番環境 metadata:"; \
+		xmllint --format /tmp/keycloak-saml-metadata-prod.xml | head -20; \
+		echo ""; \
+	fi
+	@if [ -f /tmp/keycloak-saml-metadata-local.xml ]; then \
+		echo "📄 ローカル環境 metadata:"; \
+		xmllint --format /tmp/keycloak-saml-metadata-local.xml | head -20; \
+	fi
 
 ## =============================================================================
 ## テスト・動作確認

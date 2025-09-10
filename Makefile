@@ -51,6 +51,33 @@ rds-connect: ## RDSに接続 (psql)
 		--parameters '{ "portNumber":["5432"], "localPortNumber":["5433"], "host":["$(AWS_RDS_HOST)"] }' \
 		--profile $(AWS_PROFILE)
 
+.PHONY: rds-stop
+rds-stop: ## RDS Jump EC2インスタンスを停止
+	@echo "⏹️ RDS Jump EC2インスタンスを停止中..."
+	aws ec2 stop-instances --instance-ids $(AWS_RDS_JUMP_EC2_INSTANCE_ID) --profile $(AWS_PROFILE)
+	@echo "✅ RDS Jump EC2インスタンスの停止を要求しました"
+
+.PHONY: rds-start
+rds-start: ## RDS Jump EC2インスタンスを開始
+	@echo "▶️ RDS Jump EC2インスタンスを開始中..."
+	aws ec2 start-instances --instance-ids $(AWS_RDS_JUMP_EC2_INSTANCE_ID) --profile $(AWS_PROFILE)
+	@echo "✅ RDS Jump EC2インスタンスの開始を要求しました"
+
+.PHONY: rds-restart
+rds-restart: ## RDS Jump EC2インスタンスを再起動
+	@echo "🔄 RDS Jump EC2インスタンスを再起動中..."
+	aws ec2 reboot-instances --instance-ids $(AWS_RDS_JUMP_EC2_INSTANCE_ID) --profile $(AWS_PROFILE)
+	@echo "✅ RDS Jump EC2インスタンスの再起動を要求しました"
+
+.PHONY: status-rds-jump-ec2
+status-rds-jump-ec2: ## RDS Jump EC2インスタンスのステータスを確認
+	@echo "📊 RDS Jump EC2インスタンスのステータス確認中..."
+	aws ec2 describe-instances \
+		--instance-ids $(AWS_RDS_JUMP_EC2_INSTANCE_ID) \
+		--profile $(AWS_PROFILE) \
+		--query 'Reservations[0].Instances[0].{InstanceId:InstanceId,State:State.Name,InstanceType:InstanceType,PublicIpAddress:PublicIpAddress,PrivateIpAddress:PrivateIpAddress,LaunchTime:LaunchTime}' \
+		--output table
+
 .PHONY: rds-reset-auth
 rds-reset-auth:
 	@echo "🔄 RDSのkeycloakデータベースをリセット中..."

@@ -228,5 +228,45 @@
     "Name": "/kishax/auth/iam-identity-center-issuer-url",
     "Value": "YOUR_IAM_IDENTITY_CENTER_ISSUER_URL",
     "Type": "SecureString"
+  },
+  {
+    "Name": "/kishax/auth/smtp-host",
+    "Value": "YOUR_SMTP_HOST",
+    "Type": "SecureString"
+  },
+  {
+    "Name": "/kishax/auth/smtp-port",
+    "Value": "587",
+    "Type": "SecureString"
+  },
+  {
+    "Name": "/kishax/auth/smtp-user",
+    "Value": "YOUR_SMTP_USER",
+    "Type": "SecureString"
+  },
+  {
+    "Name": "/kishax/auth/smtp-password",
+    "Value": "YOUR_SMTP_PASSWORD",
+    "Type": "SecureString"
+  },
+  {
+    "Name": "/kishax/auth/smtp-ssl",
+    "Value": "false",
+    "Type": "SecureString"
+  },
+  {
+    "Name": "/kishax/auth/smtp-starttls",
+    "Value": "true",
+    "Type": "SecureString"
+  },
+  {
+    "Name": "/kishax/auth/smtp-from",
+    "Value": "YOUR_FROM_EMAIL@yourdomain.com",
+    "Type": "SecureString"
+  },
+  {
+    "Name": "/kishax/auth/smtp-from-display-name",
+    "Value": "Your Service Name",
+    "Type": "SecureString"
   }
 ]

@@ -912,6 +912,22 @@ Resources:
               ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/kishax/auth/iam-identity-center-acs-url"
             - Name: IAM_IDENTITY_CENTER_ISSUER_URL
               ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/kishax/auth/iam-identity-center-issuer-url"
+            - Name: SMTP_HOST
+              ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/kishax/auth/smtp-host"
+            - Name: SMTP_PORT
+              ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/kishax/auth/smtp-port"
+            - Name: SMTP_USER
+              ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/kishax/auth/smtp-user"
+            - Name: SMTP_PASSWORD
+              ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/kishax/auth/smtp-password"
+            - Name: SMTP_SSL
+              ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/kishax/auth/smtp-ssl"
+            - Name: SMTP_STARTTLS
+              ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/kishax/auth/smtp-starttls"
+            - Name: SMTP_FROM
+              ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/kishax/auth/smtp-from"
+            - Name: SMTP_FROM_DISPLAY_NAME
+              ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/kishax/auth/smtp-from-display-name"
           LogConfiguration:
             LogDriver: awslogs
             Options:

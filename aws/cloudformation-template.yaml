@@ -928,6 +928,10 @@ Resources:
               ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/kishax/auth/smtp-from"
             - Name: SMTP_FROM_DISPLAY_NAME
               ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/kishax/auth/smtp-from-display-name"
+            - Name: AWS_START_URL
+              ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/kishax/auth/aws-start-url"
+            - Name: AWS_WORKMAIL_URL
+              ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/kishax/auth/aws-workmail-url"
           LogConfiguration:
             LogDriver: awslogs
             Options:

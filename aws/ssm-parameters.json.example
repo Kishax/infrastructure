@@ -268,5 +268,15 @@
     "Name": "/kishax/auth/smtp-from-display-name",
     "Value": "Your Service Name",
     "Type": "SecureString"
+  },
+  {
+    "Name": "/kishax/auth/aws-start-url",
+    "Value": "https://d-xxxxxxxxxx.awsapps.com/start",
+    "Type": "SecureString"
+  },
+  {
+    "Name": "/kishax/auth/aws-workmail-url",
+    "Value": "https://yourorg.awsapps.com/mail",
+    "Type": "SecureString"
   }
 ]

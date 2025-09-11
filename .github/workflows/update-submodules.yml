@@ -9,6 +9,7 @@ on:
         "Detect changes from gather-bot",
         "Detect changes from discord-bot",
         "Detect changes from kishax-auth",
+        "Detect changes from kishax-aws",
       ]
 
 jobs:

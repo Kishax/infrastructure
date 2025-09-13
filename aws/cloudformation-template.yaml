@@ -510,6 +510,53 @@ Resources:
         - Key: Project
           Value: Kishax
 
+  # ===========================================
+  # ElastiCache Resources (Redis)
+  # ===========================================
+  RedisSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: "Security group for Redis ElastiCache cluster"
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 6379
+          ToPort: 6379
+          SourceSecurityGroupId: !Ref EcsSecurityGroup
+          Description: "Allow Redis traffic from ECS tasks"
+      Tags:
+        - Key: Name
+          Value: kishax-redis-sg
+        - Key: Project
+          Value: Kishax
+
+  RedisSubnetGroup:
+    Type: AWS::ElastiCache::SubnetGroup
+    Properties:
+      Description: "Subnet group for Redis ElastiCache cluster"
+      SubnetIds: !Ref SubnetIds # Use private subnets
+      Tags:
+        - Key: Project
+          Value: Kishax
+
+  RedisReplicationGroup:
+    Type: AWS::ElastiCache::ReplicationGroup
+    Properties:
+      ReplicationGroupId: kishax-web-redis
+      ReplicationGroupDescription: "Redis cluster for kishax-web"
+      Engine: redis
+      CacheNodeType: cache.t4g.small
+      NumNodeGroups: 1
+      ReplicasPerNodeGroup: 0 # Single node for now. Increase for HA.
+      AutomaticFailoverEnabled: false
+      CacheSubnetGroupName: !Ref RedisSubnetGroup
+      SecurityGroupIds:
+        - !Ref RedisSecurityGroup
+      Port: 6379
+      Tags:
+        - Key: Project
+          Value: Kishax
+
   # Task Execution Role (for ECS tasks)
   EcsTaskExecutionRole:
     Type: AWS::IAM::Role
@@ -634,6 +681,19 @@ Resources:
   # ===========================================
   # Web ECS Resources
   # ===========================================
+  RedisUrlSsm:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: /kishax/web/redis-url
+      Description: "Redis connection URL for the web application"
+      Type: String
+      Value: !Sub "redis://${RedisReplicationGroup.PrimaryEndPoint.Address}:${RedisReplicationGroup.PrimaryEndPoint.Port}"
+      Tags:
+        - Key: Project
+          Value: Kishax
+        - Key: Component
+          Value: Web
+
   WebTaskDefinition:
     Type: AWS::ECS::TaskDefinition
     Properties:

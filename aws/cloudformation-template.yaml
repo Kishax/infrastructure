@@ -689,10 +689,8 @@ Resources:
       Type: String
       Value: !Sub "redis://${RedisReplicationGroup.PrimaryEndPoint.Address}:${RedisReplicationGroup.PrimaryEndPoint.Port}"
       Tags:
-        - Key: Project
-          Value: Kishax
-        - Key: Component
-          Value: Web
+        Project: Kishax
+        Component: Web
 
   WebTaskDefinition:
     Type: AWS::ECS::TaskDefinition

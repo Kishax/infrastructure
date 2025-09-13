@@ -280,11 +280,6 @@
     "Type": "SecureString"
   },
   {
-    "Name": "/kishax/web/redis-url",
-    "Value": "YOUR_REDIS_URL",
-    "Type": "SecureString"
-  },
-  {
     "Name": "/kishax/web/web-api-url",
     "Value": "https://api.yourdomain.com",
     "Type": "String"

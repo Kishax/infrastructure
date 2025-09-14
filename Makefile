@@ -704,6 +704,74 @@ update-ssm: ## aws/ssm-parameters.json の内容をSSMに一括反映
 	done
 	@echo "✅ SSMパラメータの更新が完了しました"
 
+.PHONY: update-ssm-param
+update-ssm-param: ## 特定のSSMパラメータのみ更新 (例: make update-ssm-param param=/kishax/discord/bot/token)
+	@if [ -z "$(param)" ]; then \
+		echo "❌ 'param' argument is required. (例: make update-ssm-param param=/kishax/discord/bot/token)"; \
+		exit 1; \
+	fi
+	@echo "🔍 パラメータ '$(param)' を検索中..."
+	@if ! command -v jq > /dev/null; then \
+		echo "❌ 'jq' is not installed. Please install it to continue."; \
+		exit 1; \
+	fi
+	@param_data=$$(jq -c '.[] | select(.Name == "$(param)")' aws/ssm-parameters.json); \
+	if [ -z "$$param_data" ]; then \
+		echo "❌ パラメータ '$(param)' が aws/ssm-parameters.json に見つかりません"; \
+		exit 1; \
+	fi; \
+	name=$$(echo $$param_data | jq -r '.Name'); \
+	value=$$(echo $$param_data | jq -r '.Value'); \
+	type=$$(echo $$param_data | jq -r '.Type'); \
+	echo "🚀 パラメータ '$$name' を更新中..."; \
+	aws ssm put-parameter \
+		--name "$$name" \
+		--value "$$value" \
+		--type "$$type" \
+		--profile $(AWS_PROFILE) \
+		--overwrite > /dev/null; \
+	echo "✅ パラメータ '$$name' の更新が完了しました"
+
+.PHONY: setup-ssm-completion
+setup-ssm-completion: ## SSMパラメータのTAB補完を設定
+	@echo "🔧 SSMパラメータのTAB補完を設定中..."
+	@if ! command -v jq > /dev/null; then \
+		echo "❌ 'jq' is not installed. Please install it to continue."; \
+		exit 1; \
+	fi
+	@chmod +x scripts/make-completion
+	@COMPLETION_FILE="$$PWD/scripts/make-completion"; \
+	SHELL_RC=""; \
+	if [ "$$SHELL" = "/bin/zsh" ] || [ "$$SHELL" = "/usr/bin/zsh" ]; then \
+		SHELL_RC="$$HOME/.zshrc"; \
+	elif [ "$$SHELL" = "/bin/bash" ] || [ "$$SHELL" = "/usr/bin/bash" ]; then \
+		SHELL_RC="$$HOME/.bashrc"; \
+	else \
+		echo "⚠️  未対応のシェル: $$SHELL"; \
+		echo "手動で以下を ~/.bashrc または ~/.zshrc に追加してください:"; \
+		echo "source $$COMPLETION_FILE"; \
+		exit 0; \
+	fi; \
+	if grep -q "source $$COMPLETION_FILE" "$$SHELL_RC" 2>/dev/null; then \
+		echo "ℹ️  補完設定は既に $$SHELL_RC に存在します"; \
+	else \
+		echo "" >> "$$SHELL_RC"; \
+		echo "# Kishax infrastructure make completion" >> "$$SHELL_RC"; \
+		echo "source $$COMPLETION_FILE" >> "$$SHELL_RC"; \
+		echo "✅ 補完設定を $$SHELL_RC に追加しました"; \
+	fi; \
+	echo "🔄 新しいターミナルを開くか、以下を実行してください:"; \
+	echo "source $$SHELL_RC"
+
+.PHONY: list-ssm-params
+list-ssm-params: ## SSMパラメータ一覧を表示
+	@echo "📋 利用可能なSSMパラメータ:"
+	@if ! command -v jq > /dev/null; then \
+		echo "❌ 'jq' is not installed. Please install it to continue."; \
+		exit 1; \
+	fi
+	@jq -r '.[].Name' aws/ssm-parameters.json | sort
+
 ## =============================================================================
 ## Docker (Buildx)
 ## =============================================================================

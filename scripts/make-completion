@@ -1,0 +1,126 @@
+#!/bin/bash
+
+# Make completion script for SSM parameters
+# This script provides TAB completion for make update-ssm-param param=<parameter_name>
+
+# Save original make completion if it exists
+_original_make_completion() {
+    # Try to use the original _make function if available
+    if type -t _make > /dev/null 2>&1; then
+        _make "$@"
+        return
+    fi
+
+    # Fallback: basic make target completion
+    local cur="${COMP_WORDS[COMP_CWORD]}"
+    if [[ ${COMP_CWORD} == 1 ]]; then
+        local makefile="${PWD}/Makefile"
+        if [[ -f "$makefile" ]]; then
+            local opts=$(awk -F: '/^[a-zA-Z0-9_-]+:/ {print $1}' "$makefile" | sort -u)
+            COMPREPLY=($(compgen -W "${opts}" -- "${cur}"))
+        fi
+    fi
+}
+
+_kishax_make_completion() {
+    local cur prev opts
+    COMPREPLY=()
+    cur="${COMP_WORDS[COMP_CWORD]}"
+    prev="${COMP_WORDS[COMP_CWORD-1]}"
+
+    # Debug: uncomment the following lines to debug completion
+    # echo "" >&2
+    # echo "Debug: COMP_CWORD=$COMP_CWORD" >&2
+    # echo "Debug: COMP_WORDS=(${COMP_WORDS[*]})" >&2
+    # echo "Debug: cur='$cur'" >&2
+    # echo "Debug: prev='$prev'" >&2
+
+    # Special handling for update-ssm-param command
+    # Handle case where user typed "make update-ssm-param<TAB>" (no space)
+    if [[ ${COMP_CWORD} == 1 ]] && [[ ${cur} == *"update-ssm-param" ]]; then
+        COMPREPLY=($(compgen -W "update-ssm-param param=" -- "${cur}"))
+        return 0
+    fi
+
+    if [[ ${COMP_WORDS[1]} == "update-ssm-param" ]]; then
+        # Check if we're completing a param= argument
+        if [[ ${cur} == param=* ]] || [[ ${prev} == "param=" ]]; then
+            # Get SSM parameter names from aws/ssm-parameters.json using jq
+            local script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+            local json_file="${script_dir}/../aws/ssm-parameters.json"
+
+            # If the relative path doesn't work, try from current working directory
+            if [[ ! -f "$json_file" ]]; then
+                json_file="./aws/ssm-parameters.json"
+            fi
+
+            # If still not found, try absolute path based on PWD
+            if [[ ! -f "$json_file" ]]; then
+                json_file="${PWD}/aws/ssm-parameters.json"
+            fi
+
+            if [[ -f "$json_file" ]] && command -v jq > /dev/null; then
+                local param_prefix=""
+
+                # Determine the prefix to filter by
+                if [[ ${cur} == param=* ]]; then
+                    param_prefix="${cur#param=}"
+                elif [[ ${prev} == "param=" ]]; then
+                    param_prefix="${cur}"
+                fi
+
+                local all_params=$(jq -r '.[].Name' "$json_file" 2>/dev/null)
+
+                # Generate completions based on the current context
+                if [[ ${cur} == param=* ]]; then
+                    # Complete with param= prefix
+                    local param_completions=()
+                    local filtered_params=""
+
+                    # Special case: if cur is exactly "param=" (no parameter name yet)
+                    if [[ ${cur} == "param=" ]]; then
+                        # Show all parameters with param= prefix
+                        filtered_params="$all_params"
+                    else
+                        # Normal case: filter parameters based on the prefix after param=
+                        if [[ -n "$param_prefix" ]]; then
+                            filtered_params=$(echo "$all_params" | grep -E "^${param_prefix}")
+                        else
+                            filtered_params="$all_params"
+                        fi
+                    fi
+
+                    while IFS= read -r param; do
+                        [[ -n "$param" ]] && param_completions+=("param=${param}")
+                    done <<< "$filtered_params"
+
+                    COMPREPLY=($(compgen -W "${param_completions[*]}" -- "${cur}"))
+                elif [[ ${prev} == "param=" ]]; then
+                    # Complete without param= prefix (param= is already typed as separate word)
+                    # Handle both empty cur and non-empty cur cases
+                    local filtered_params=""
+                    if [[ -z "$cur" ]]; then
+                        # cur is empty - show all parameters
+                        filtered_params="$all_params"
+                    else
+                        # cur has some content - filter by prefix
+                        filtered_params=$(echo "$all_params" | grep -E "^${cur}")
+                    fi
+                    COMPREPLY=($(compgen -W "${filtered_params}" -- "${cur}"))
+                fi
+            fi
+            return 0
+        elif [[ ${COMP_CWORD} == 2 ]]; then
+            # Second argument position - suggest param= if not already typed
+            COMPREPLY=($(compgen -W "param=" -- "${cur}"))
+            return 0
+        fi
+    fi
+
+    # Fall back to original make completion
+    _original_make_completion
+}
+
+# Register the completion function for make command
+# Use -o nospace to prevent automatic space addition after completion
+complete -o nospace -F _kishax_make_completion make

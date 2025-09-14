@@ -35,14 +35,19 @@ _kishax_make_completion() {
     # echo "Debug: cur='$cur'" >&2
     # echo "Debug: prev='$prev'" >&2
 
-    # Special handling for update-ssm-param command
-    # Handle case where user typed "make update-ssm-param<TAB>" (no space)
+    # Special handling for update-ssm-param and get-ssm-param commands
+    # Handle case where user typed "make update-ssm-param<TAB>" or "make get-ssm-param<TAB>" (no space)
     if [[ ${COMP_CWORD} == 1 ]] && [[ ${cur} == *"update-ssm-param" ]]; then
         COMPREPLY=($(compgen -W "update-ssm-param param=" -- "${cur}"))
         return 0
     fi
 
-    if [[ ${COMP_WORDS[1]} == "update-ssm-param" ]]; then
+    if [[ ${COMP_CWORD} == 1 ]] && [[ ${cur} == *"get-ssm-param" ]]; then
+        COMPREPLY=($(compgen -W "get-ssm-param param=" -- "${cur}"))
+        return 0
+    fi
+
+    if [[ ${COMP_WORDS[1]} == "update-ssm-param" ]] || [[ ${COMP_WORDS[1]} == "get-ssm-param" ]]; then
         # Check if we're completing a param= argument
         if [[ ${cur} == param=* ]] || [[ ${prev} == "param=" ]]; then
             # Get SSM parameter names from aws/ssm-parameters.json using jq

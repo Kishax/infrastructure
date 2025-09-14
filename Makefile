@@ -733,6 +733,20 @@ update-ssm-param: ## SSMパラメータを更新 (引数なし:全て, 例: make
 		echo "✅ パラメータ '$$name' の更新が完了しました"; \
 	fi
 
+.PHONY: get-ssm-param
+get-ssm-param: ## SSMパラメータを取得 (例: make get-ssm-param param=/kishax/discord/bot/token)
+	@if [ -z "$(param)" ]; then \
+		echo "❌ 'param' argument is required. (例: make get-ssm-param param=/kishax/discord/bot/token)"; \
+		exit 1; \
+	fi
+	@echo "🔍 パラメータ '$(param)' を取得中..."
+	@aws ssm get-parameter \
+		--name "$(param)" \
+		--with-decryption \
+		--profile $(AWS_PROFILE) \
+		--query 'Parameter.{Name:Name,Value:Value,Type:Type}' \
+		--output table
+
 .PHONY: setup-ssm-completion
 setup-ssm-completion: ## SSMパラメータのTAB補完を設定
 	@echo "🔧 SSMパラメータのTAB補完を設定中..."

@@ -767,6 +767,8 @@ Resources:
               ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/kishax/web/web-api-url"
             - Name: WEB_API_KEY
               ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/kishax/web/web-api-key"
+            - Name: INTERNAL_API_KEY
+              ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/kishax/web/internal-api-key"
           LogConfiguration:
             LogDriver: awslogs
             Options:

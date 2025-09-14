@@ -288,5 +288,10 @@
     "Name": "/kishax/web/web-api-key",
     "Value": "YOUR_WEB_API_KEY",
     "Type": "SecureString"
+  },
+  {
+    "Name": "/kishax/web/internal-api-key",
+    "Value": "YOUR_INTERNAL_API_KEY",
+    "Type": "SecureString"
   }
 ]

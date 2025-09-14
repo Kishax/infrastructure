@@ -683,54 +683,55 @@ update-infra: generate-prod-configs ## CloudFormationスタックを更新
 	@echo "✅ CloudFormationスタックの更新を開始しました"
 
 
-.PHONY: update-ssm
-update-ssm: ## aws/ssm-parameters.json の内容をSSMに一括反映
-	@echo "🚀 SSMパラメータを更新中..."
+.PHONY: update-ssm-param
+update-ssm-param: ## SSMパラメータを更新 (引数なし:全て, 例: make update-ssm-param param=/kishax/discord/bot/token)
 	@if ! command -v jq > /dev/null; then \
 		echo "❌ 'jq' is not installed. Please install it to continue."; \
 		exit 1; \
 	fi
-	@jq -c '.[]' aws/ssm-parameters.json | while read -r item; do \
-		name=$$(echo $$item | jq -r '.Name'); \
-		value=$$(echo $$item | jq -r '.Value'); \
-		type=$$(echo $$item | jq -r '.Type'); \
-		echo "Updating $$name..."; \
+	@if [ -z "$(param)" ]; then \
+		echo "⚠️  全てのSSMパラメータを更新しようとしています。"; \
+		PARAM_COUNT=$$(jq '. | length' aws/ssm-parameters.json); \
+		echo "📊 更新対象: $$PARAM_COUNT 個のパラメータ"; \
+		echo ""; \
+		read -p "🤔 本当に全てのSSMパラメータを更新しますか? (y/N): " confirm; \
+		if [ "$$confirm" != "y" ] && [ "$$confirm" != "Y" ]; then \
+			echo "❌ 更新を中止しました"; \
+			exit 1; \
+		fi; \
+		echo "🚀 全SSMパラメータを更新中..."; \
+		jq -c '.[]' aws/ssm-parameters.json | while read -r item; do \
+			name=$$(echo $$item | jq -r '.Name'); \
+			value=$$(echo $$item | jq -r '.Value'); \
+			type=$$(echo $$item | jq -r '.Type'); \
+			echo "Updating $$name..."; \
+			aws ssm put-parameter \
+				--name "$$name" \
+				--value "$$value" \
+				--type "$$type" \
+				--profile $(AWS_PROFILE) \
+				--overwrite > /dev/null; \
+		done; \
+		echo "✅ 全SSMパラメータの更新が完了しました"; \
+	else \
+		echo "🔍 パラメータ '$(param)' を検索中..."; \
+		param_data=$$(jq -c '.[] | select(.Name == "$(param)")' aws/ssm-parameters.json); \
+		if [ -z "$$param_data" ]; then \
+			echo "❌ パラメータ '$(param)' が aws/ssm-parameters.json に見つかりません"; \
+			exit 1; \
+		fi; \
+		name=$$(echo $$param_data | jq -r '.Name'); \
+		value=$$(echo $$param_data | jq -r '.Value'); \
+		type=$$(echo $$param_data | jq -r '.Type'); \
+		echo "🚀 パラメータ '$$name' を更新中..."; \
 		aws ssm put-parameter \
 			--name "$$name" \
 			--value "$$value" \
 			--type "$$type" \
 			--profile $(AWS_PROFILE) \
 			--overwrite > /dev/null; \
-	done
-	@echo "✅ SSMパラメータの更新が完了しました"
-
-.PHONY: update-ssm-param
-update-ssm-param: ## 特定のSSMパラメータのみ更新 (例: make update-ssm-param param=/kishax/discord/bot/token)
-	@if [ -z "$(param)" ]; then \
-		echo "❌ 'param' argument is required. (例: make update-ssm-param param=/kishax/discord/bot/token)"; \
-		exit 1; \
+		echo "✅ パラメータ '$$name' の更新が完了しました"; \
 	fi
-	@echo "🔍 パラメータ '$(param)' を検索中..."
-	@if ! command -v jq > /dev/null; then \
-		echo "❌ 'jq' is not installed. Please install it to continue."; \
-		exit 1; \
-	fi
-	@param_data=$$(jq -c '.[] | select(.Name == "$(param)")' aws/ssm-parameters.json); \
-	if [ -z "$$param_data" ]; then \
-		echo "❌ パラメータ '$(param)' が aws/ssm-parameters.json に見つかりません"; \
-		exit 1; \
-	fi; \
-	name=$$(echo $$param_data | jq -r '.Name'); \
-	value=$$(echo $$param_data | jq -r '.Value'); \
-	type=$$(echo $$param_data | jq -r '.Type'); \
-	echo "🚀 パラメータ '$$name' を更新中..."; \
-	aws ssm put-parameter \
-		--name "$$name" \
-		--value "$$value" \
-		--type "$$type" \
-		--profile $(AWS_PROFILE) \
-		--overwrite > /dev/null; \
-	echo "✅ パラメータ '$$name' の更新が完了しました"
 
 .PHONY: setup-ssm-completion
 setup-ssm-completion: ## SSMパラメータのTAB補完を設定

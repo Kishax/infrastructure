@@ -102,7 +102,7 @@ GitHub OAuth → Keycloak (2FA必須) → AWS IAM Identity Center → AWS Consol
 
 ### アーキテクチャ概要
 
-全ての通信は **kishax-aws ライブラリ** に統合され、SQS + Redis Pub/Sub によるハイブリッド通信システムを実現しています。
+全ての通信は **kishax-api ライブラリ** に統合され、SQS + Redis Pub/Sub によるハイブリッド通信システムを実現しています。
 
 ### 通信フロー
 
@@ -126,7 +126,7 @@ GitHub OAuth → Keycloak (2FA必須) → AWS IAM Identity Center → AWS Consol
 3. **MC**: プレイヤーがOTP入力 → SQS経由で `mc_web_otp_response` を Web に送信
 4. **Web**: OTP検証完了 → 認証成功/失敗をレスポンス
 
-### kishax-aws 統合
+### kishax-api 統合
 
 - **SqsWorker**: SQS + Redis Pub/Sub を統合したメッセージハンドラ
 - **QUEUE_MODE**: `WEB` または `MC` でメッセージ送受信方向を制御
@@ -216,7 +216,7 @@ make deploy-web
   - `/kishax/redis/*` - Redis接続情報
   - `/kishax/mc/*` - MC プラグイン設定
 
-### 新環境変数 (kishax-aws統合)
+### 新環境変数 (kishax-api統合)
 - **QUEUE_MODE**: `WEB` または `MC` でメッセージ方向制御
 - **REDIS_URL**: Redis Pub/Sub 接続URL
 - **WEB_API_KEY**: Web ↔ MC 通信認証キー

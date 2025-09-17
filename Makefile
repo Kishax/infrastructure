@@ -539,7 +539,7 @@ setup-first-time: setup-prerequisites setup-aws-auth ## 初回セットアップ
 .PHONY: aws-install-deps
 aws-install-deps: ## AWS設定生成ツールの依存関係をインストール
 	@echo "📦 AWS設定生成ツールの依存関係をインストール中..."
-	@cd aws/scripts && npm install
+	@cd scripts && npm install
 	@echo "✅ 依存関係のインストールが完了しました"
 
 .PHONY: generate-prod-configs
@@ -549,7 +549,7 @@ generate-prod-configs: ## 本番用AWS設定ファイルを動的生成
 		echo "⚠️  依存関係が見つかりません。インストールを実行します..."; \
 		$(MAKE) aws-install-deps; \
 	fi
-	@cd aws/scripts && npm run generate
+	@cd scripts && npm run generate
 	@echo "✅ 本番用設定ファイルの生成が完了しました"
 
 .PHONY: update-infra

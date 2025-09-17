@@ -966,23 +966,82 @@ Resources:
       TaskRoleArn: !GetAtt EcsTaskRole.Arn
       ContainerDefinitions:
         - Name: kishax-api
-          Image: !Sub "${AccountId}.dkr.ecr.us-east-1.amazonaws.com/kishax-api:latest"
+          Image: !Sub "${AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/kishax-api:latest"
           Essential: true
           PortMappings:
             - ContainerPort: 8080
               Protocol: tcp
           Environment:
+            # Multi-Module Configuration
+            - Name: SQS_BRIDGE_VERSION
+              Value: "1.0.4"
+            - Name: MC_AUTH_VERSION
+              Value: "1.0.4"
+            - Name: ENVIRONMENT
+              Value: "production"
+
+            # Authentication API Configuration
+            - Name: AUTH_API_ENABLED
+              Value: "true"
+            - Name: AUTH_API_PORT
+              Value: "8080"
+            - Name: AUTH_API_KEY
+              ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/kishax/api/auth-api-key"
+
+            # Database Configuration
             - Name: DATABASE_URL
-              Value: "{{resolve:ssm:/kishax/web/database-url}}"
-            - Name: API_KEY
-              Value: "{{resolve:ssm:/kishax/api/api-key}}"
+              ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/kishax/web/database-url"
+
+            # AWS SQS Configuration
+            - Name: AWS_REGION
+              Value: !Ref AWS::Region
+            - Name: MC_WEB_SQS_ACCESS_KEY_ID
+              ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/kishax/api/sqs-access-key-id"
+            - Name: MC_WEB_SQS_SECRET_ACCESS_KEY
+              ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/kishax/api/sqs-secret-access-key"
+            - Name: MC_TO_WEB_QUEUE_URL
+              ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/kishax/web/mc-to-web-queue-url"
+            - Name: WEB_TO_MC_QUEUE_URL
+              ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/kishax/web/web-to-mc-queue-url"
+
+            # Redis Configuration
+            - Name: REDIS_URL
+              ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/kishax/web/redis-url"
+            - Name: REDIS_CONNECTION_TIMEOUT
+              Value: "5000"
+            - Name: REDIS_COMMAND_TIMEOUT
+              Value: "3000"
+
+            # SQS Worker Configuration
+            - Name: QUEUE_MODE
+              Value: "MC"
+            - Name: SQS_WORKER_ENABLED
+              Value: "true"
+            - Name: SQS_WORKER_POLLING_INTERVAL_SECONDS
+              Value: "5"
+            - Name: SQS_WORKER_MAX_MESSAGES
+              Value: "10"
+            - Name: SQS_WORKER_WAIT_TIME_SECONDS
+              Value: "20"
+            - Name: SQS_WORKER_VISIBILITY_TIMEOUT_SECONDS
+              Value: "30"
+
+            # Web API Configuration (Internal ECS Network)
+            - Name: WEB_API_URL
+              Value: !Sub "http://${ApplicationLoadBalancer.DNSName}"
+            - Name: WEB_API_KEY
+              ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/kishax/web/web-api-key"
+
+            # Application Configuration
+            - Name: APP_SHUTDOWN_GRACE_PERIOD_SECONDS
+              Value: "30"
             - Name: ENVIRONMENT
               Value: production
           LogConfiguration:
             LogDriver: awslogs
             Options:
               awslogs-group: !Ref KishaxApiLogGroup
-              awslogs-region: us-east-1
+              awslogs-region: !Ref AWS::Region
               awslogs-stream-prefix: ecs
       Tags:
         - Key: Project

@@ -54,10 +54,11 @@ KishaX の統合インフラストラクチャプロジェクト
 ```
 kishax/
 ├── apps/                   # アプリケーション層
+│   ├── api/               # 共通APIライブラリ (Java)
 │   ├── auth/              # カスタムIdP認証サービス (Keycloak/ECS)
-│   ├── discord-bot/       # Discord Bot (ECS)
-│   ├── gather-bot/        # Gather Bot (ECS)
-│   ├── mc-plugins/        # Minecraft プラグイン (Velocity + Spigot)
+│   ├── discord/           # Discord Bot (ECS)
+│   ├── gather/            # Gather Bot (ECS)
+│   ├── mc/                # Minecraft プラグイン (Velocity + Spigot)
 │   └── web/               # Web アプリケーション (ECS)
 └── aws/                   # AWS共通リソース・ポリシー
 ```

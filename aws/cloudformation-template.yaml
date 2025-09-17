@@ -754,28 +754,10 @@ Resources:
               ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/kishax/web/email-pass"
             - Name: EMAIL_FROM
               ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/kishax/web/email-from"
-            - Name: MC_SOCKET_HOST
-              ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/kishax/web/mc-socket-host"
-            - Name: MC_SOCKET_PORT
-              ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/kishax/web/mc-socket-port"
-            - Name: MC_WEB_SQS_ACCESS_KEY_ID
-              ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/kishax/web/mc-web-sqs-access-key-id"
-            - Name: MC_WEB_SQS_SECRET_ACCESS_KEY
-              ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/kishax/web/mc-web-sqs-secret-access-key"
-            - Name: WEB_TO_MC_QUEUE_URL
-              ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/kishax/web/web-to-mc-queue-url"
-            - Name: MC_TO_WEB_QUEUE_URL
-              ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/kishax/web/mc-to-web-queue-url"
             - Name: REDIS_URL
               ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/kishax/web/redis-url"
-            - Name: WEB_API_URL
-              ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/kishax/web/web-api-url"
-            - Name: WEB_API_KEY
-              ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/kishax/web/web-api-key"
             - Name: INTERNAL_API_KEY
               ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/kishax/web/internal-api-key"
-            - Name: AUTH_API_KEY
-              ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/kishax/web/auth-api-key"
           LogConfiguration:
             LogDriver: awslogs
             Options:
@@ -1014,7 +996,7 @@ Resources:
 
             # SQS Worker Configuration
             - Name: QUEUE_MODE
-              Value: "MC"
+              Value: "WEB"
             - Name: SQS_WORKER_ENABLED
               Value: "true"
             - Name: SQS_WORKER_POLLING_INTERVAL_SECONDS
@@ -1026,17 +1008,9 @@ Resources:
             - Name: SQS_WORKER_VISIBILITY_TIMEOUT_SECONDS
               Value: "30"
 
-            # Web API Configuration (Internal ECS Network)
-            - Name: WEB_API_URL
-              Value: !Sub "http://${ApplicationLoadBalancer.DNSName}"
-            - Name: WEB_API_KEY
-              ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/kishax/web/web-api-key"
-
             # Application Configuration
             - Name: APP_SHUTDOWN_GRACE_PERIOD_SECONDS
               Value: "30"
-            - Name: ENVIRONMENT
-              Value: production
           LogConfiguration:
             LogDriver: awslogs
             Options:
@@ -1069,7 +1043,7 @@ Resources:
       ServiceName: kishax-api-service-v2
       Cluster: !Ref EcsCluster
       TaskDefinition: !Ref KishaxApiTaskDefinition
-      DesiredCount: 1
+      DesiredCount: 0 # 一時的に停止
       LaunchType: FARGATE
       NetworkConfiguration:
         AwsvpcConfiguration:
@@ -1201,7 +1175,7 @@ Resources:
       ServiceName: kishax-auth-service-v2
       Cluster: !Ref EcsCluster
       TaskDefinition: !Ref AuthTaskDefinition
-      DesiredCount: 1
+      DesiredCount: 0 # 一時的に停止
       LaunchType: FARGATE
       NetworkConfiguration:
         AwsvpcConfiguration:

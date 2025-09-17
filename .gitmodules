@@ -7,12 +7,12 @@
 [submodule "apps/gather-bot"]
 	path = apps/gather-bot
 	url = https://github.com/Kishax/gather-bot.git
-[submodule "apps/mc-plugins"]
-	path = apps/mc-plugins
-	url = https://github.com/Kishax/kishax.git
 [submodule "apps/auth"]
 	path = apps/auth
 	url = https://github.com/Kishax/kishax-auth.git
-[submodule "apps/aws"]
-	path = apps/aws
-	url = https://github.com/Kishax/kishax-aws
+[submodule "apps/mc"]
+	path = apps/mc
+	url = https://github.com/Kishax/kishax.git
+[submodule "apps/api"]
+	path = apps/api
+	url = https://github.com/Kishax/kishax-api.git

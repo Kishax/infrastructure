@@ -497,6 +497,11 @@ Resources:
           SourceSecurityGroupId: !Ref AlbSecurityGroup
           Description: Allow traffic from ALB to ECS tasks
         - IpProtocol: tcp
+          FromPort: 8080
+          ToPort: 8080
+          SourceSecurityGroupId: !Ref AlbSecurityGroup
+          Description: Allow traffic from ALB to Kishax API tasks
+        - IpProtocol: tcp
           FromPort: 9000
           ToPort: 9000
           SourceSecurityGroupId: !Ref AlbSecurityGroup
@@ -749,24 +754,8 @@ Resources:
               ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/kishax/web/email-pass"
             - Name: EMAIL_FROM
               ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/kishax/web/email-from"
-            - Name: MC_SOCKET_HOST
-              ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/kishax/web/mc-socket-host"
-            - Name: MC_SOCKET_PORT
-              ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/kishax/web/mc-socket-port"
-            - Name: MC_WEB_SQS_ACCESS_KEY_ID
-              ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/kishax/web/mc-web-sqs-access-key-id"
-            - Name: MC_WEB_SQS_SECRET_ACCESS_KEY
-              ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/kishax/web/mc-web-sqs-secret-access-key"
-            - Name: WEB_TO_MC_QUEUE_URL
-              ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/kishax/web/web-to-mc-queue-url"
-            - Name: MC_TO_WEB_QUEUE_URL
-              ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/kishax/web/mc-to-web-queue-url"
             - Name: REDIS_URL
               ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/kishax/web/redis-url"
-            - Name: WEB_API_URL
-              ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/kishax/web/web-api-url"
-            - Name: WEB_API_KEY
-              ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/kishax/web/web-api-key"
             - Name: INTERNAL_API_KEY
               ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/kishax/web/internal-api-key"
           LogConfiguration:
@@ -907,6 +896,173 @@ Resources:
           TargetGroupArn: !Ref AuthTargetGroup
 
   # ===========================================
+  # Kishax API ECS Resources
+  # ===========================================
+  KishaxApiTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: kishax-api-tg-v2
+      Port: 8080
+      Protocol: HTTP
+      TargetType: ip
+      VpcId: !Ref VpcId
+      HealthCheckPath: /api/health
+      HealthCheckIntervalSeconds: 30
+      HealthCheckTimeoutSeconds: 10
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 3
+      Matcher:
+        HttpCode: 200
+      Tags:
+        - Key: Project
+          Value: Kishax
+        - Key: Component
+          Value: KishaxApi
+
+  KishaxApiListenerRule:
+    Type: AWS::ElasticLoadBalancingV2::ListenerRule
+    Properties:
+      ListenerArn: !Ref HttpsListener
+      Priority: 50
+      Conditions:
+        - Field: host-header
+          Values:
+            - api.kishax.net
+        - Field: path-pattern
+          Values:
+            - /mc/auth/*
+      Actions:
+        - Type: forward
+          TargetGroupArn: !Ref KishaxApiTargetGroup
+
+  KishaxApiTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: kishax-api-v2
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+        - FARGATE
+      Cpu: 512
+      Memory: 1024
+      ExecutionRoleArn: !GetAtt EcsTaskExecutionRole.Arn
+      TaskRoleArn: !GetAtt EcsTaskRole.Arn
+      ContainerDefinitions:
+        - Name: kishax-api
+          Image: !Sub "${AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/kishax-api:latest"
+          Essential: true
+          PortMappings:
+            - ContainerPort: 8080
+              Protocol: tcp
+          Environment:
+            # Multi-Module Configuration
+            - Name: SQS_BRIDGE_VERSION
+              Value: "1.0.5"
+            - Name: MC_AUTH_VERSION
+              Value: "1.0.5"
+            - Name: ENVIRONMENT
+              Value: "production"
+
+            # Authentication API Configuration
+            - Name: AUTH_API_ENABLED
+              Value: "true"
+            - Name: AUTH_API_PORT
+              Value: "8080"
+            - Name: AUTH_API_KEY
+              ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/kishax/api/auth-api-key"
+
+            # Database Configuration
+            - Name: DATABASE_URL
+              ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/kishax/web/database-url"
+
+            # AWS SQS Configuration
+            - Name: AWS_REGION
+              Value: !Ref AWS::Region
+            - Name: MC_WEB_SQS_ACCESS_KEY_ID
+              ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/kishax/api/sqs-access-key-id"
+            - Name: MC_WEB_SQS_SECRET_ACCESS_KEY
+              ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/kishax/api/sqs-secret-access-key"
+            - Name: MC_TO_WEB_QUEUE_URL
+              ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/kishax/web/mc-to-web-queue-url"
+            - Name: WEB_TO_MC_QUEUE_URL
+              ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/kishax/web/web-to-mc-queue-url"
+
+            # Redis Configuration
+            - Name: REDIS_URL
+              ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/kishax/web/redis-url"
+            - Name: REDIS_CONNECTION_TIMEOUT
+              Value: "5000"
+            - Name: REDIS_COMMAND_TIMEOUT
+              Value: "3000"
+
+            # SQS Worker Configuration
+            - Name: QUEUE_MODE
+              Value: "WEB"
+            - Name: SQS_WORKER_ENABLED
+              Value: "true"
+            - Name: SQS_WORKER_POLLING_INTERVAL_SECONDS
+              Value: "5"
+            - Name: SQS_WORKER_MAX_MESSAGES
+              Value: "10"
+            - Name: SQS_WORKER_WAIT_TIME_SECONDS
+              Value: "20"
+            - Name: SQS_WORKER_VISIBILITY_TIMEOUT_SECONDS
+              Value: "30"
+
+            # Application Configuration
+            - Name: APP_SHUTDOWN_GRACE_PERIOD_SECONDS
+              Value: "30"
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref KishaxApiLogGroup
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: ecs
+      Tags:
+        - Key: Project
+          Value: Kishax
+        - Key: Component
+          Value: KishaxApi
+
+  KishaxApiLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: /ecs/kishax-api-v2
+      RetentionInDays: 30
+      Tags:
+        - Key: Project
+          Value: Kishax
+        - Key: Component
+          Value: KishaxApi
+
+  KishaxApiService:
+    Type: AWS::ECS::Service
+    DependsOn:
+      - KishaxApiTargetGroup
+      - KishaxApiListenerRule
+    Properties:
+      ServiceName: kishax-api-service-v2
+      Cluster: !Ref EcsCluster
+      TaskDefinition: !Ref KishaxApiTaskDefinition
+      DesiredCount: 0 # 一時的に停止
+      LaunchType: FARGATE
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          SecurityGroups:
+            - !Ref EcsSecurityGroup
+          Subnets: !Ref PublicSubnetIds
+          AssignPublicIp: ENABLED
+      LoadBalancers:
+        - TargetGroupArn: !Ref KishaxApiTargetGroup
+          ContainerName: kishax-api
+          ContainerPort: 8080
+      HealthCheckGracePeriodSeconds: 120
+      Tags:
+        - Key: Project
+          Value: Kishax
+        - Key: Component
+          Value: KishaxApi
+
+  # ===========================================
   # Auth ECS Resources (Keycloak)
   # ===========================================
   AuthTaskDefinition:
@@ -1019,7 +1175,7 @@ Resources:
       ServiceName: kishax-auth-service-v2
       Cluster: !Ref EcsCluster
       TaskDefinition: !Ref AuthTaskDefinition
-      DesiredCount: 1
+      DesiredCount: 0 # 一時的に停止
       LaunchType: FARGATE
       NetworkConfiguration:
         AwsvpcConfiguration:
@@ -1306,6 +1462,25 @@ Outputs:
     Value: !Ref GatherBotTaskDefinition
     Export:
       Name: !Sub "${AWS::StackName}-GatherBotTaskDefinitionArn"
+
+  # Kishax API ECS Outputs
+  KishaxApiServiceArn:
+    Description: Kishax API ECS Service ARN
+    Value: !Ref KishaxApiService
+    Export:
+      Name: !Sub "${AWS::StackName}-KishaxApiServiceArn"
+
+  KishaxApiTaskDefinitionArn:
+    Description: Kishax API Task Definition ARN
+    Value: !Ref KishaxApiTaskDefinition
+    Export:
+      Name: !Sub "${AWS::StackName}-KishaxApiTaskDefinitionArn"
+
+  KishaxApiTargetGroupArn:
+    Description: Kishax API Target Group ARN
+    Value: !Ref KishaxApiTargetGroup
+    Export:
+      Name: !Sub "${AWS::StackName}-KishaxApiTargetGroupArn"
 
   # Discord Bot ECS Outputs
   DiscordBotServiceArn:

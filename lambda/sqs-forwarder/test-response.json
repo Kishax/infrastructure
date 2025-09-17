@@ -1,1 +1,0 @@
-{"statusCode":200,"headers":{"Content-Type":"application/json","Access-Control-Allow-Origin":"*","Access-Control-Allow-Methods":"POST, OPTIONS","Access-Control-Allow-Headers":"Content-Type, Authorization"},"body":"{\"success\":true,\"messageId\":\"00659e69-06e4-4e6d-8e11-5b092fbf59b0\",\"message\":\"Message queued successfully\"}"}

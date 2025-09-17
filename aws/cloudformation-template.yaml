@@ -956,9 +956,9 @@ Resources:
           Environment:
             # Multi-Module Configuration
             - Name: SQS_BRIDGE_VERSION
-              Value: "1.0.4"
+              Value: "1.0.5"
             - Name: MC_AUTH_VERSION
-              Value: "1.0.4"
+              Value: "1.0.5"
             - Name: ENVIRONMENT
               Value: "production"
 

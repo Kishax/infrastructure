@@ -273,5 +273,10 @@
     "Name": "/kishax/web/internal-api-key",
     "Value": "YOUR_INTERNAL_API_KEY",
     "Type": "SecureString"
+  },
+  {
+    "Name": "/kishax/api/auth-api-key",
+    "Value": "KishaxApiKey2024SecureAuthenticationToken",
+    "Type": "SecureString"
   }
 ]

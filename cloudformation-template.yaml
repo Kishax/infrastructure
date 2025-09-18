@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: "2010-09-09"
-Description: "Kishax Infrastructure - Discord Bot, SQS, Lambda, API Gateway"
+Description: "Kishax Infrastructure"
 
 Parameters:
   AccountId:
@@ -110,242 +110,6 @@ Resources:
   # Only update if needed, avoid creating duplicate
   # ===========================================
 
-  # ===========================================
-  # Lambda Resources (SQS Forwarder)
-  # ===========================================
-  LambdaExecutionRole:
-    Type: AWS::IAM::Role
-    Properties:
-      RoleName: kishax-infrastructure-lambda-role
-      AssumeRolePolicyDocument:
-        Version: "2012-10-17"
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: lambda.amazonaws.com
-            Action: sts:AssumeRole
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
-      Policies:
-        - PolicyName: SQSAccessPolicy
-          PolicyDocument:
-            Version: "2012-10-17"
-            Statement:
-              - Effect: Allow
-                Action:
-                  - sqs:SendMessage
-                Resource:
-                  - !GetAtt DiscordQueue.Arn
-                  - !GetAtt WebToMcQueue.Arn
-                  - !GetAtt McToWebQueue.Arn
-        - PolicyName: SSMAccessPolicy
-          PolicyDocument:
-            Version: "2012-10-17"
-            Statement:
-              - Effect: Allow
-                Action:
-                  - ssm:GetParameter
-                Resource:
-                  - !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/kishax/sqs/queue-url"
-                  - !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/kishax/sqs/web-to-mc-queue-url"
-                  - !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/kishax/sqs/mc-to-web-queue-url"
-
-  SqsForwarderLambdaFunction:
-    Type: AWS::Lambda::Function
-    Properties:
-      FunctionName: kishax-infrastructure-lambda
-      Runtime: nodejs20.x
-      Handler: index.handler
-      Role: !GetAtt LambdaExecutionRole.Arn
-      Code:
-        ZipFile: |
-          // Placeholder code - actual code will be deployed separately
-          export const handler = async (event) => {
-            console.log('SQS Forwarder Lambda - Placeholder');
-            return {
-              statusCode: 200,
-              body: JSON.stringify({ message: 'Placeholder response' })
-            };
-          };
-      Timeout: 30
-      MemorySize: 128
-      Tags:
-        - Key: Project
-          Value: Kishax
-        - Key: Component
-          Value: Lambda
-
-  # ===========================================
-  # API Gateway Resources
-  # ===========================================
-  ApiGateway:
-    Type: AWS::ApiGateway::RestApi
-    Properties:
-      Name: kishax-infrastructure-api
-      Description: API Gateway for Kishax Discord Bot
-      EndpointConfiguration:
-        Types:
-          - REGIONAL
-      Tags:
-        - Key: Project
-          Value: Kishax
-
-  # Discord endpoint resource
-  ApiGatewayDiscordResource:
-    Type: AWS::ApiGateway::Resource
-    Properties:
-      RestApiId: !Ref ApiGateway
-      ParentId: !GetAtt ApiGateway.RootResourceId
-      PathPart: discord
-
-  ApiGatewayDiscordMethod:
-    Type: AWS::ApiGateway::Method
-    Properties:
-      RestApiId: !Ref ApiGateway
-      ResourceId: !Ref ApiGatewayDiscordResource
-      HttpMethod: POST
-      AuthorizationType: AWS_IAM
-      Integration:
-        Type: AWS_PROXY
-        IntegrationHttpMethod: POST
-        Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${SqsForwarderLambdaFunction.Arn}/invocations"
-
-  # Server Status endpoint
-  ApiGatewayServerStatusResource:
-    Type: AWS::ApiGateway::Resource
-    Properties:
-      RestApiId: !Ref ApiGateway
-      ParentId: !GetAtt ApiGateway.RootResourceId
-      PathPart: server-status
-
-  ApiGatewayServerStatusMethod:
-    Type: AWS::ApiGateway::Method
-    Properties:
-      RestApiId: !Ref ApiGateway
-      ResourceId: !Ref ApiGatewayServerStatusResource
-      HttpMethod: POST
-      AuthorizationType: AWS_IAM
-      Integration:
-        Type: AWS_PROXY
-        IntegrationHttpMethod: POST
-        Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${SqsForwarderLambdaFunction.Arn}/invocations"
-
-  # Player Request endpoint
-  ApiGatewayPlayerRequestResource:
-    Type: AWS::ApiGateway::Resource
-    Properties:
-      RestApiId: !Ref ApiGateway
-      ParentId: !GetAtt ApiGateway.RootResourceId
-      PathPart: player-request
-
-  ApiGatewayPlayerRequestMethod:
-    Type: AWS::ApiGateway::Method
-    Properties:
-      RestApiId: !Ref ApiGateway
-      ResourceId: !Ref ApiGatewayPlayerRequestResource
-      HttpMethod: POST
-      AuthorizationType: AWS_IAM
-      Integration:
-        Type: AWS_PROXY
-        IntegrationHttpMethod: POST
-        Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${SqsForwarderLambdaFunction.Arn}/invocations"
-
-  # Broadcast endpoint
-  ApiGatewayBroadcastResource:
-    Type: AWS::ApiGateway::Resource
-    Properties:
-      RestApiId: !Ref ApiGateway
-      ParentId: !GetAtt ApiGateway.RootResourceId
-      PathPart: broadcast
-
-  ApiGatewayBroadcastMethod:
-    Type: AWS::ApiGateway::Method
-    Properties:
-      RestApiId: !Ref ApiGateway
-      ResourceId: !Ref ApiGatewayBroadcastResource
-      HttpMethod: POST
-      AuthorizationType: AWS_IAM
-      Integration:
-        Type: AWS_PROXY
-        IntegrationHttpMethod: POST
-        Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${SqsForwarderLambdaFunction.Arn}/invocations"
-
-  # Web to MC endpoint
-  ApiGatewayWebToMcResource:
-    Type: AWS::ApiGateway::Resource
-    Properties:
-      RestApiId: !Ref ApiGateway
-      ParentId: !GetAtt ApiGateway.RootResourceId
-      PathPart: web-to-mc
-
-  ApiGatewayWebToMcMethod:
-    Type: AWS::ApiGateway::Method
-    Properties:
-      RestApiId: !Ref ApiGateway
-      ResourceId: !Ref ApiGatewayWebToMcResource
-      HttpMethod: POST
-      AuthorizationType: AWS_IAM
-      Integration:
-        Type: AWS_PROXY
-        IntegrationHttpMethod: POST
-        Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${SqsForwarderLambdaFunction.Arn}/invocations"
-
-  # MC to Web endpoint
-  ApiGatewayMcToWebResource:
-    Type: AWS::ApiGateway::Resource
-    Properties:
-      RestApiId: !Ref ApiGateway
-      ParentId: !GetAtt ApiGateway.RootResourceId
-      PathPart: mc-to-web
-
-  ApiGatewayMcToWebMethod:
-    Type: AWS::ApiGateway::Method
-    Properties:
-      RestApiId: !Ref ApiGateway
-      ResourceId: !Ref ApiGatewayMcToWebResource
-      HttpMethod: POST
-      AuthorizationType: AWS_IAM
-      Integration:
-        Type: AWS_PROXY
-        IntegrationHttpMethod: POST
-        Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${SqsForwarderLambdaFunction.Arn}/invocations"
-
-  # Lambda permissions for API Gateway
-  LambdaApiGatewayPermission:
-    Type: AWS::Lambda::Permission
-    Properties:
-      FunctionName: !Ref SqsForwarderLambdaFunction
-      Action: lambda:InvokeFunction
-      Principal: apigateway.amazonaws.com
-      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*/*"
-
-  # API Gateway Deployment
-  ApiGatewayDeployment:
-    Type: AWS::ApiGateway::Deployment
-    DependsOn:
-      - ApiGatewayDiscordMethod
-      - ApiGatewayServerStatusMethod
-      - ApiGatewayPlayerRequestMethod
-      - ApiGatewayBroadcastMethod
-      - ApiGatewayWebToMcMethod
-      - ApiGatewayMcToWebMethod
-    Properties:
-      RestApiId: !Ref ApiGateway
-      StageName: prod
-
-  # ===========================================
-  # IAM User for External API Access
-  # ===========================================
-  DiscordApiUser:
-    Type: AWS::IAM::User
-    Properties:
-      UserName: kishax-discord-api-user
-      Tags:
-        - Key: Project
-          Value: Kishax
-        - Key: Component
-          Value: ExternalAPI
-
   # MC-Web SQS通信専用ユーザー
   McWebSqsUser:
     Type: AWS::IAM::User
@@ -356,24 +120,6 @@ Resources:
           Value: Kishax
         - Key: Component
           Value: McWebCommunication
-
-  DiscordApiUserPolicy:
-    Type: AWS::IAM::Policy
-    Properties:
-      PolicyName: KishaxDiscordApiUserPolicy-v3
-      PolicyDocument:
-        Version: "2012-10-17"
-        Statement:
-          - Effect: Allow
-            Action: "execute-api:Invoke"
-            Resource: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*/POST/discord"
-          - Effect: Allow
-            Action:
-              - "sqs:ReceiveMessage"
-              - "sqs:DeleteMessage"
-            Resource: !GetAtt DiscordQueue.Arn
-      Users:
-        - !Ref DiscordApiUser
 
   # MC-Web SQS通信専用ポリシー
   McWebSqsUserPolicy:
@@ -421,31 +167,6 @@ Resources:
       Tags:
         Project: Kishax
         Component: McWebCommunication
-
-  DiscordApiUserAccessKey:
-    Type: AWS::IAM::AccessKey
-    Properties:
-      UserName: !Ref DiscordApiUser
-
-  DiscordApiUserAccessKeyIdSsm:
-    Type: AWS::SSM::Parameter
-    Properties:
-      Name: /kishax/api/discord-api-user-access-key-id
-      Description: "Access key ID for the external Discord API user (managed by CloudFormation)"
-      Type: String
-      Value: !Ref DiscordApiUserAccessKey
-      Tags:
-        Project: Kishax
-
-  DiscordApiUserSecretAccessKeySsm:
-    Type: AWS::SSM::Parameter
-    Properties:
-      Name: /kishax/api/discord-api-user-secret-access-key
-      Description: "Secret access key for the external Discord API user (managed by CloudFormation)"
-      Type: String
-      Value: !GetAtt DiscordApiUserAccessKey.SecretAccessKey
-      Tags:
-        Project: Kishax
 
   # ===========================================
   # ECS Resources (for Discord Bot service)
@@ -967,28 +688,10 @@ Resources:
               Value: "true"
             - Name: AUTH_API_PORT
               Value: "8080"
-            - Name: AUTH_API_KEY
-              ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/kishax/api/auth-api-key"
-
-            # Database Configuration
-            - Name: DATABASE_URL
-              ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/kishax/web/database-url"
 
             # AWS SQS Configuration
             - Name: AWS_REGION
               Value: !Ref AWS::Region
-            - Name: MC_WEB_SQS_ACCESS_KEY_ID
-              ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/kishax/api/sqs-access-key-id"
-            - Name: MC_WEB_SQS_SECRET_ACCESS_KEY
-              ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/kishax/api/sqs-secret-access-key"
-            - Name: MC_TO_WEB_QUEUE_URL
-              ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/kishax/web/mc-to-web-queue-url"
-            - Name: WEB_TO_MC_QUEUE_URL
-              ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/kishax/web/web-to-mc-queue-url"
-
-            # Redis Configuration
-            - Name: REDIS_URL
-              ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/kishax/web/redis-url"
             - Name: REDIS_CONNECTION_TIMEOUT
               Value: "5000"
             - Name: REDIS_COMMAND_TIMEOUT
@@ -1011,6 +714,28 @@ Resources:
             # Application Configuration
             - Name: APP_SHUTDOWN_GRACE_PERIOD_SECONDS
               Value: "30"
+          Secrets:
+            # Authentication API Configuration
+            - Name: AUTH_API_KEY
+              ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/kishax/api/auth-api-key"
+
+            # Database Configuration
+            - Name: DATABASE_URL
+              ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/kishax/web/database-url"
+
+            # AWS SQS Configuration (正しいパラメータパスに修正)
+            - Name: MC_WEB_SQS_ACCESS_KEY_ID
+              ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/kishax/mc-web-sqs/access-key-id"
+            - Name: MC_WEB_SQS_SECRET_ACCESS_KEY
+              ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/kishax/mc-web-sqs/secret-access-key"
+            - Name: MC_TO_WEB_QUEUE_URL
+              ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/kishax/web/mc-to-web-queue-url"
+            - Name: WEB_TO_MC_QUEUE_URL
+              ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/kishax/web/web-to-mc-queue-url"
+
+            # Redis Configuration
+            - Name: REDIS_URL
+              ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/kishax/web/redis-url"
           LogConfiguration:
             LogDriver: awslogs
             Options:
@@ -1366,32 +1091,6 @@ Outputs:
     Value: !GetAtt McToWebQueue.Arn
     Export:
       Name: !Sub "${AWS::StackName}-McToWebQueueArn"
-
-  # Lambda Outputs
-  LambdaFunctionArn:
-    Description: Lambda Function ARN
-    Value: !GetAtt SqsForwarderLambdaFunction.Arn
-    Export:
-      Name: !Sub "${AWS::StackName}-LambdaFunctionArn"
-
-  LambdaFunctionName:
-    Description: Lambda Function Name
-    Value: !Ref SqsForwarderLambdaFunction
-    Export:
-      Name: !Sub "${AWS::StackName}-LambdaFunctionName"
-
-  # API Gateway Outputs
-  ApiGatewayUrl:
-    Description: API Gateway URL
-    Value: !Sub "https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/prod"
-    Export:
-      Name: !Sub "${AWS::StackName}-ApiGatewayUrl"
-
-  ApiGatewayId:
-    Description: API Gateway ID
-    Value: !Ref ApiGateway
-    Export:
-      Name: !Sub "${AWS::StackName}-ApiGatewayId"
 
   # ECS Outputs
   EcsClusterArn:

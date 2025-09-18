@@ -54,10 +54,11 @@ KishaX の統合インフラストラクチャプロジェクト
 ```
 kishax/
 ├── apps/                   # アプリケーション層
+│   ├── api/               # 共通APIライブラリ (Java)
 │   ├── auth/              # カスタムIdP認証サービス (Keycloak/ECS)
-│   ├── discord-bot/       # Discord Bot (ECS)
-│   ├── gather-bot/        # Gather Bot (ECS)
-│   ├── mc-plugins/        # Minecraft プラグイン (Velocity + Spigot)
+│   ├── discord/           # Discord Bot (ECS)
+│   ├── gather/            # Gather Bot (ECS)
+│   ├── mc/                # Minecraft プラグイン (Velocity + Spigot)
 │   └── web/               # Web アプリケーション (ECS)
 └── aws/                   # AWS共通リソース・ポリシー
 ```
@@ -154,16 +155,6 @@ GitHub OAuth → Keycloak (2FA必須) → AWS IAM Identity Center → AWS Consol
 - `kishax-mc-to-web-queue-v2` + DLQ (MC→Web通信用) 
 - `kishax-discord-queue-v2` + DLQ (Discord Bot用)
 
-**API Gateway エンドポイント:**
-- `POST /discord` - MC→Discord 通知送信
-- `POST /server-status` - サーバーステータス通知
-- `POST /player-request` - プレイヤーリクエスト
-- `POST /broadcast` - ブロードキャストメッセージ
-- その他運用エンドポイント
-
-**Lambda:**
-- `kishax-infrastructure-lambda` - API Gateway → SQS 転送処理
-
 ## QuickStart
 
 ### First Setup
@@ -183,14 +174,10 @@ make deploy-gather-bot
 make deploy-web
 ```
 
-## Dev-Guide
-
-- **AWS インフラ**: [aws/README.md](./aws/README.md)  
-- **デプロイメント**: [aws/DEPLOY.md](./aws/DEPLOY.md)
-
 ## Infrastructure Summary
 
 ### ECS Services (Fargate)
+- **API Service**: `kishax-api-service-v2` (256CPU/512MB)
 - **Auth Service**: `kishax-auth-service-v2` (512CPU/1024MB)
 - **Discord Bot**: `kishax-discord-bot-service-v2` (256CPU/512MB)
 - **Gather Bot**: `kishax-gather-bot-service-v2` (256CPU/512MB)  

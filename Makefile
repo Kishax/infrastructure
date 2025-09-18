@@ -159,7 +159,7 @@ status-services: ## ECSサービスステータスを確認
 	@echo "🏃 ECSサービスステータス確認中..."
 	aws ecs describe-services \
 		--cluster kishax-infrastructure-cluster \
-		--services kishax-discord-bot-service-v2 kishax-gather-bot-service-v2 kishax-web-service-v2 kishax-auth-service-v2 \
+		--services kishax-discord-bot-service-v2 kishax-gather-bot-service-v2 kishax-web-service-v2 kishax-auth-service-v2 kishax-api-service-v2 \
 		--profile $(AWS_PROFILE) \
 		--query 'services[].{ServiceName:serviceName,DesiredCount:desiredCount,RunningCount:runningCount,Status:status}' \
 		--output table
@@ -297,21 +297,8 @@ cancel-stack-update: ## CloudFormationスタック更新をキャンセル
 ## =============================================================================
 
 .PHONY: deploy-all
-deploy-all: deploy-lambda deploy-discord-bot deploy-gather-bot deploy-web deploy-auth deploy-api ## 全サービスをデプロイ
+deploy-all: deploy-discord-bot deploy-gather-bot deploy-web deploy-auth deploy-api ## 全サービスをデプロイ
 	@echo "✅ 全サービスのデプロイが完了しました"
-
-.PHONY: deploy-lambda
-deploy-lambda: ## Lambda関数をデプロイ
-	@echo "🚀 Lambda関数をデプロイ中..."
-	cd aws/lambda/sqs-forwarder && \
-	npm install && \
-	rm -f deployment.zip && \
-	zip -r deployment.zip index.js package.json package-lock.json node_modules/ && \
-	aws lambda update-function-code \
-		--function-name $(AWS_LAMBDA_FUNCTION_NAME) \
-		--zip-file fileb://deployment.zip \
-		--profile $(AWS_PROFILE)
-	@echo "✅ Lambda関数のデプロイが完了しました"
 
 .PHONY: deploy-discord-bot
 deploy-discord-bot: ## Discord Botをデプロイ
@@ -369,35 +356,6 @@ validate-saml-metadata: ## ダウンロードしたSAML metadataの内容を確�
 ## テスト・動作確認
 ## =============================================================================
 
-.PHONY: test-lambda
-test-lambda: ## Lambda関数をテスト
-	@echo "🧪 Lambda関数をテスト中..."
-	cd aws/lambda/sqs-forwarder && \
-	aws lambda invoke \
-		--function-name $(AWS_LAMBDA_FUNCTION_NAME) \
-		--payload fileb://api-gateway-test.json \
-		--profile $(AWS_PROFILE) \
-		test-response.json && \
-	cat test-response.json
-	@echo "✅ Lambda関数のテストが完了しました"
-
-.PHONY: test-api-gateway
-test-api-gateway: ## API Gatewayをテスト
-	@echo "🧪 API Gatewayをテスト中..."
-	aws apigateway test-invoke-method \
-		--rest-api-id $(API_GATEWAY_ID) \
-		--resource-id $(API_GATEWAY_RESOURCE_ID) \
-		--http-method POST \
-		--body '{"type": "test_connection", "message": "Makefile test"}' \
-		--profile $(AWS_PROFILE)
-	@echo "✅ API Gatewayのテストが完了しました"
-
-.PHONY: test-minecraft-discord
-test-minecraft-discord: ## Minecraft→Discord連携をテスト
-	@echo "🧪 Minecraft→Discord連携をテスト中..."
-	@echo "Minecraftサーバーからプレイヤーのjoin/leaveイベントを発生させて、"
-	@echo "Discordチャンネルにメッセージが表示されることを確認してください。"
-
 .PHONY: test-sqs-queues
 test-sqs-queues: ## SQSキュー状態確認
 	@echo "📊 SQS キュー状態確認中..."
@@ -421,10 +379,6 @@ test-sqs-queues: ## SQSキュー状態確認
 ## =============================================================================
 ## 監視・デバッグ
 ## =============================================================================
-
-.PHONY: logs-lambda
-logs-lambda: ## Lambdaログを表示
-	aws logs tail /aws/lambda/$(AWS_LAMBDA_FUNCTION_NAME) --follow --profile $(AWS_PROFILE)
 
 .PHONY: logs-discord-bot
 logs-discord-bot: ## Discord Botログを表示
@@ -539,17 +493,17 @@ setup-first-time: setup-prerequisites setup-aws-auth ## 初回セットアップ
 .PHONY: aws-install-deps
 aws-install-deps: ## AWS設定生成ツールの依存関係をインストール
 	@echo "📦 AWS設定生成ツールの依存関係をインストール中..."
-	@cd aws/scripts && npm install
+	@cd scripts && npm install
 	@echo "✅ 依存関係のインストールが完了しました"
 
 .PHONY: generate-prod-configs
 generate-prod-configs: ## 本番用AWS設定ファイルを動的生成
 	@echo "🔧 本番用AWS設定ファイルを生成中..."
-	@if [ ! -d "aws/scripts/node_modules" ]; then \
+	@if [ ! -d "scripts/node_modules" ]; then \
 		echo "⚠️  依存関係が見つかりません。インストールを実行します..."; \
 		$(MAKE) aws-install-deps; \
 	fi
-	@cd aws/scripts && npm run generate
+	@cd scripts && npm run generate
 	@echo "✅ 本番用設定ファイルの生成が完了しました"
 
 .PHONY: update-infra
@@ -559,8 +513,8 @@ update-infra: generate-prod-configs ## CloudFormationスタックを更新
 		--profile $(AWS_PROFILE) \
 		--region $(AWS_REGION) \
 		--stack-name kishax-infrastructure \
-		--template-body file://aws/cloudformation-template.prod.yaml \
-		--parameters file://aws/cloudformation-parameters.prod.json \
+		--template-body file://cloudformation-template.prod.yaml \
+		--parameters file://cloudformation-parameters.prod.json \
 		--capabilities CAPABILITY_NAMED_IAM
 	@echo "✅ CloudFormationスタックの更新を開始しました"
 
@@ -573,7 +527,7 @@ update-ssm-param: ## SSMパラメータを更新 (引数なし:全て, 例: make
 	fi
 	@if [ -z "$(param)" ]; then \
 		echo "⚠️  全てのSSMパラメータを更新しようとしています。"; \
-		PARAM_COUNT=$$(jq '. | length' aws/ssm-parameters.json); \
+		PARAM_COUNT=$$(jq '. | length' ssm-parameters.json); \
 		echo "📊 更新対象: $$PARAM_COUNT 個のパラメータ"; \
 		echo ""; \
 		read -p "🤔 本当に全てのSSMパラメータを更新しますか? (y/N): " confirm; \
@@ -582,7 +536,7 @@ update-ssm-param: ## SSMパラメータを更新 (引数なし:全て, 例: make
 			exit 1; \
 		fi; \
 		echo "🚀 全SSMパラメータを更新中..."; \
-		jq -c '.[]' aws/ssm-parameters.json | while read -r item; do \
+		jq -c '.[]' ssm-parameters.json | while read -r item; do \
 			name=$$(echo $$item | jq -r '.Name'); \
 			value=$$(echo $$item | jq -r '.Value'); \
 			type=$$(echo $$item | jq -r '.Type'); \
@@ -597,9 +551,9 @@ update-ssm-param: ## SSMパラメータを更新 (引数なし:全て, 例: make
 		echo "✅ 全SSMパラメータの更新が完了しました"; \
 	else \
 		echo "🔍 パラメータ '$(param)' を検索中..."; \
-		param_data=$$(jq -c '.[] | select(.Name == "$(param)")' aws/ssm-parameters.json); \
+		param_data=$$(jq -c '.[] | select(.Name == "$(param)")' ssm-parameters.json); \
 		if [ -z "$$param_data" ]; then \
-			echo "❌ パラメータ '$(param)' が aws/ssm-parameters.json に見つかりません"; \
+			echo "❌ パラメータ '$(param)' が ssm-parameters.json に見つかりません"; \
 			exit 1; \
 		fi; \
 		name=$$(echo $$param_data | jq -r '.Name'); \
@@ -667,7 +621,7 @@ list-ssm-params: ## SSMパラメータ一覧を表示
 		echo "❌ 'jq' is not installed. Please install it to continue."; \
 		exit 1; \
 	fi
-	@jq -r '.[].Name' aws/ssm-parameters.json | sort
+	@jq -r '.[].Name' ssm-parameters.json | sort
 
 ## =============================================================================
 ## Docker (Buildx)

@@ -1,3 +1,6 @@
+ssm-parameters.json
+node_modules/
+
 ### プロジェクト固有 ###
 .env
 .env.backup
@@ -52,6 +55,5 @@ deploy.sh
 deploy-*.sh
 
 # 動的生成される本番用AWS設定ファイル
-aws/cloudformation-template.prod.yaml
-aws/cloudformation-parameters.prod.json
-aws/scripts/node_modules/
+cloudformation-template.prod.yaml
+cloudformation-parameters.prod.json

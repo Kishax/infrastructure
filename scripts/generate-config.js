@@ -2,7 +2,7 @@ const fs = require("fs");
 const path = require("path");
 
 // プロジェクトルートの.envファイルを読み込み
-require("dotenv").config({ path: path.resolve(__dirname, "../../.env") });
+require("dotenv").config({ path: path.resolve(__dirname, "../.env") });
 
 /**
  * $(環境変数名) 形式の文字列を実際の環境変数値に置換
@@ -27,7 +27,7 @@ function replaceEnvVariables(content) {
  */
 function generateProdFiles() {
   console.log("🔧 本番用AWS設定ファイルを生成中...");
-  console.log("📁 環境変数ファイル: " + path.resolve(__dirname, "../../.env"));
+  console.log("📁 環境変数ファイル: " + path.resolve(__dirname, "../.env"));
 
   const files = [
     "cloudformation-template.yaml",
@@ -72,8 +72,8 @@ function generateProdFiles() {
 
   console.log("\n🎉 全ての本番用設定ファイルの生成が完了しました!");
   console.log("📋 生成されたファイル:");
-  console.log("  - aws/cloudformation-template.prod.yaml");
-  console.log("  - aws/cloudformation-parameters.prod.json");
+  console.log("  - cloudformation-template.prod.yaml");
+  console.log("  - cloudformation-parameters.prod.json");
 }
 
 // メイン処理実行
@@ -82,4 +82,3 @@ if (require.main === module) {
 }
 
 module.exports = { generateProdFiles, replaceEnvVariables };
-

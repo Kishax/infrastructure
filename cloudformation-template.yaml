@@ -688,28 +688,10 @@ Resources:
               Value: "true"
             - Name: AUTH_API_PORT
               Value: "8080"
-            - Name: AUTH_API_KEY
-              ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/kishax/api/auth-api-key"
-
-            # Database Configuration
-            - Name: DATABASE_URL
-              ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/kishax/web/database-url"
 
             # AWS SQS Configuration
             - Name: AWS_REGION
               Value: !Ref AWS::Region
-            - Name: MC_WEB_SQS_ACCESS_KEY_ID
-              ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/kishax/api/sqs-access-key-id"
-            - Name: MC_WEB_SQS_SECRET_ACCESS_KEY
-              ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/kishax/api/sqs-secret-access-key"
-            - Name: MC_TO_WEB_QUEUE_URL
-              ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/kishax/web/mc-to-web-queue-url"
-            - Name: WEB_TO_MC_QUEUE_URL
-              ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/kishax/web/web-to-mc-queue-url"
-
-            # Redis Configuration
-            - Name: REDIS_URL
-              ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/kishax/web/redis-url"
             - Name: REDIS_CONNECTION_TIMEOUT
               Value: "5000"
             - Name: REDIS_COMMAND_TIMEOUT
@@ -732,6 +714,28 @@ Resources:
             # Application Configuration
             - Name: APP_SHUTDOWN_GRACE_PERIOD_SECONDS
               Value: "30"
+          Secrets:
+            # Authentication API Configuration
+            - Name: AUTH_API_KEY
+              ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/kishax/api/auth-api-key"
+
+            # Database Configuration
+            - Name: DATABASE_URL
+              ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/kishax/web/database-url"
+
+            # AWS SQS Configuration (正しいパラメータパスに修正)
+            - Name: MC_WEB_SQS_ACCESS_KEY_ID
+              ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/kishax/mc-web-sqs/access-key-id"
+            - Name: MC_WEB_SQS_SECRET_ACCESS_KEY
+              ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/kishax/mc-web-sqs/secret-access-key"
+            - Name: MC_TO_WEB_QUEUE_URL
+              ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/kishax/web/mc-to-web-queue-url"
+            - Name: WEB_TO_MC_QUEUE_URL
+              ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/kishax/web/web-to-mc-queue-url"
+
+            # Redis Configuration
+            - Name: REDIS_URL
+              ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/kishax/web/redis-url"
           LogConfiguration:
             LogDriver: awslogs
             Options:

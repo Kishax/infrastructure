@@ -170,19 +170,19 @@ status-services: ## ECSサービスステータスを確認
 
 .PHONY: restart-discord-bot
 restart-discord-bot: ## Discord Botサービスを再起動 (force-new-deployment)
-	@scripts/ecs-service.sh restart kishax-discord-bot-service-v2
+	@scripts/ecs-service.sh restart kishax-discord-bot-service-v2 kishax-infrastructure-cluster $(AWS_PROFILE)
 
 .PHONY: restart-gather-bot
 restart-gather-bot: ## Gather Botサービスを再起動 (force-new-deployment)
-	@scripts/ecs-service.sh restart kishax-gather-bot-service-v2
+	@scripts/ecs-service.sh restart kishax-gather-bot-service-v2 kishax-infrastructure-cluster $(AWS_PROFILE)
 
 .PHONY: restart-web
 restart-web: ## Webサービスを再起動 (force-new-deployment)
-	@scripts/ecs-service.sh restart kishax-web-service-v2
+	@scripts/ecs-service.sh restart kishax-web-service-v2 kishax-infrastructure-cluster $(AWS_PROFILE)
 
 .PHONY: restart-auth
 restart-auth: ## Authサービスを再起動 (force-new-deployment)
-	@scripts/ecs-service.sh restart kishax-auth-service-v2
+	@scripts/ecs-service.sh restart kishax-auth-service-v2 kishax-infrastructure-cluster $(AWS_PROFILE)
 
 .PHONY: restart-all-services
 restart-all-services: restart-discord-bot restart-gather-bot restart-web restart-auth ## 全ECSサービスを再起動 (force-new-deployment)
@@ -194,23 +194,23 @@ restart-all-services: restart-discord-bot restart-gather-bot restart-web restart
 
 .PHONY: enable-discord-bot
 enable-discord-bot: ## Discord Botサービスを有効化 (desired-count=1)
-	@scripts/ecs-service.sh enable kishax-discord-bot-service-v2
+	@scripts/ecs-service.sh enable kishax-discord-bot-service-v2 kishax-infrastructure-cluster $(AWS_PROFILE)
 
 .PHONY: enable-gather-bot
 enable-gather-bot: ## Gather Botサービスを有効化 (desired-count=1)
-	@scripts/ecs-service.sh enable kishax-gather-bot-service-v2
+	@scripts/ecs-service.sh enable kishax-gather-bot-service-v2 kishax-infrastructure-cluster $(AWS_PROFILE)
 
 .PHONY: enable-web
 enable-web: ## Webサービスを有効化 (desired-count=1)
-	@scripts/ecs-service.sh enable kishax-web-service-v2
+	@scripts/ecs-service.sh enable kishax-web-service-v2 kishax-infrastructure-cluster $(AWS_PROFILE)
 
 .PHONY: enable-auth
 enable-auth: ## Authサービスを有効化 (desired-count=1)
-	@scripts/ecs-service.sh enable kishax-auth-service-v2
+	@scripts/ecs-service.sh enable kishax-auth-service-v2 kishax-infrastructure-cluster $(AWS_PROFILE)
 
 .PHONY: enable-api
 enable-api: ## APIサービスを有効化 (desired-count=1)
-	@scripts/ecs-service.sh enable kishax-api-service-v2
+	@scripts/ecs-service.sh enable kishax-api-service-v2 kishax-infrastructure-cluster $(AWS_PROFILE)
 
 .PHONY: enable-all-services
 enable-all-services: enable-discord-bot enable-gather-bot enable-web enable-auth enable-api ## 全ECSサービスを有効化
@@ -218,23 +218,23 @@ enable-all-services: enable-discord-bot enable-gather-bot enable-web enable-auth
 
 .PHONY: disable-discord-bot
 disable-discord-bot: ## Discord Botサービスを無効化 (desired-count=0)
-	@scripts/ecs-service.sh disable kishax-discord-bot-service-v2
+	@scripts/ecs-service.sh disable kishax-discord-bot-service-v2 kishax-infrastructure-cluster $(AWS_PROFILE)
 
 .PHONY: disable-gather-bot
 disable-gather-bot: ## Gather Botサービスを無効化 (desired-count=0)
-	@scripts/ecs-service.sh disable kishax-gather-bot-service-v2
+	@scripts/ecs-service.sh disable kishax-gather-bot-service-v2 kishax-infrastructure-cluster $(AWS_PROFILE)
 
 .PHONY: disable-web
 disable-web: ## Webサービスを無効化 (desired-count=0)
-	@scripts/ecs-service.sh disable kishax-web-service-v2
+	@scripts/ecs-service.sh disable kishax-web-service-v2 kishax-infrastructure-cluster $(AWS_PROFILE)
 
 .PHONY: disable-auth
 disable-auth: ## Authサービスを無効化 (desired-count=0)
-	@scripts/ecs-service.sh disable kishax-auth-service-v2
+	@scripts/ecs-service.sh disable kishax-auth-service-v2 kishax-infrastructure-cluster $(AWS_PROFILE)
 
 .PHONY: disable-api
 disable-api: ## APIサービスを無効化 (desired-count=0)
-	@scripts/ecs-service.sh disable kishax-api-service-v2
+	@scripts/ecs-service.sh disable kishax-api-service-v2 kishax-infrastructure-cluster $(AWS_PROFILE)
 
 .PHONY: disable-all-services
 disable-all-services: disable-discord-bot disable-gather-bot disable-web disable-auth disable-api ## 全ECSサービスを無効化
@@ -246,19 +246,19 @@ disable-all-services: disable-discord-bot disable-gather-bot disable-web disable
 
 .PHONY: start-discord-bot
 start-discord-bot: ## Discord Bot停止中サービスを開始
-	@scripts/ecs-service.sh start kishax-discord-bot-service-v2
+	@scripts/ecs-service.sh start kishax-discord-bot-service-v2 kishax-infrastructure-cluster $(AWS_PROFILE)
 
 .PHONY: start-gather-bot
 start-gather-bot: ## Gather Bot停止中サービスを開始
-	@scripts/ecs-service.sh start kishax-gather-bot-service-v2
+	@scripts/ecs-service.sh start kishax-gather-bot-service-v2 kishax-infrastructure-cluster $(AWS_PROFILE)
 
 .PHONY: start-web
 start-web: ## Web停止中サービスを開始
-	@scripts/ecs-service.sh start kishax-web-service-v2
+	@scripts/ecs-service.sh start kishax-web-service-v2 kishax-infrastructure-cluster $(AWS_PROFILE)
 
 .PHONY: start-auth
 start-auth: ## Auth停止中サービスを開始
-	@scripts/ecs-service.sh start kishax-auth-service-v2
+	@scripts/ecs-service.sh start kishax-auth-service-v2 kishax-infrastructure-cluster $(AWS_PROFILE)
 
 .PHONY: start-all-services
 start-all-services: start-discord-bot start-gather-bot start-web start-auth ## 全停止中サービスを開始
@@ -266,19 +266,19 @@ start-all-services: start-discord-bot start-gather-bot start-web start-auth ## �
 
 .PHONY: stop-discord-bot
 stop-discord-bot: ## Discord Bot実行中タスクを即座に停止
-	@scripts/ecs-service.sh stop kishax-discord-bot-service-v2
+	@scripts/ecs-service.sh stop kishax-discord-bot-service-v2 kishax-infrastructure-cluster $(AWS_PROFILE)
 
 .PHONY: stop-gather-bot
 stop-gather-bot: ## Gather Bot実行中タスクを即座に停止
-	@scripts/ecs-service.sh stop kishax-gather-bot-service-v2
+	@scripts/ecs-service.sh stop kishax-gather-bot-service-v2 kishax-infrastructure-cluster $(AWS_PROFILE)
 
 .PHONY: stop-web
 stop-web: ## Web実行中タスクを即座に停止
-	@scripts/ecs-service.sh stop kishax-web-service-v2
+	@scripts/ecs-service.sh stop kishax-web-service-v2 kishax-infrastructure-cluster $(AWS_PROFILE)
 
 .PHONY: stop-auth
 stop-auth: ## Auth実行中タスクを即座に停止
-	@scripts/ecs-service.sh stop kishax-auth-service-v2
+	@scripts/ecs-service.sh stop kishax-auth-service-v2 kishax-infrastructure-cluster $(AWS_PROFILE)
 
 .PHONY: stop-all-services
 stop-all-services: stop-discord-bot stop-gather-bot stop-web stop-auth ## 全実行中タスクを即座に停止

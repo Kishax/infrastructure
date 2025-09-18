@@ -159,7 +159,7 @@ status-services: ## ECSサービスステータスを確認
 	@echo "🏃 ECSサービスステータス確認中..."
 	aws ecs describe-services \
 		--cluster kishax-infrastructure-cluster \
-		--services kishax-discord-bot-service-v2 kishax-gather-bot-service-v2 kishax-web-service-v2 kishax-auth-service-v2 \
+		--services kishax-discord-bot-service-v2 kishax-gather-bot-service-v2 kishax-web-service-v2 kishax-auth-service-v2 kishax-api-service-v2 \
 		--profile $(AWS_PROFILE) \
 		--query 'services[].{ServiceName:serviceName,DesiredCount:desiredCount,RunningCount:runningCount,Status:status}' \
 		--output table

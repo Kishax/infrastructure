@@ -578,10 +578,10 @@ Resources:
       HealthCheckPath: /health/ready
       HealthCheckProtocol: HTTP
       HealthCheckPort: 9000
-      HealthCheckIntervalSeconds: 30
-      HealthCheckTimeoutSeconds: 5
+      HealthCheckIntervalSeconds: 60
+      HealthCheckTimeoutSeconds: 30
       HealthyThresholdCount: 2
-      UnhealthyThresholdCount: 3
+      UnhealthyThresholdCount: 5
       Matcher:
         HttpCode: "200"
       Tags:

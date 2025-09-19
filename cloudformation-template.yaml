@@ -50,63 +50,63 @@ Resources:
         - Key: Component
           Value: DiscordBot
 
-  # Web-MC Communication Queues
-  WebToMcQueue:
+  # New naming: TO_MC Queue (WEB → MC)
+  ToMcQueue:
     Type: AWS::SQS::Queue
     Properties:
-      QueueName: kishax-web-to-mc-queue-v2
+      QueueName: kishax-to-mc-queue-v2
       VisibilityTimeout: 300
       MessageRetentionPeriod: 1209600 # 14 days
       ReceiveMessageWaitTimeSeconds: 20
       RedrivePolicy:
-        deadLetterTargetArn: !GetAtt WebToMcDeadLetterQueue.Arn
+        deadLetterTargetArn: !GetAtt ToMcDeadLetterQueue.Arn
         maxReceiveCount: 3
       Tags:
         - Key: Project
           Value: Kishax
         - Key: Component
-          Value: WebMcCommunication
+          Value: ToMcCommunication
 
-  WebToMcDeadLetterQueue:
+  ToMcDeadLetterQueue:
     Type: AWS::SQS::Queue
     Properties:
-      QueueName: kishax-web-to-mc-dlq-v2
+      QueueName: kishax-to-mc-dlq-v2
       MessageRetentionPeriod: 1209600 # 14 days
       Tags:
         - Key: Project
           Value: Kishax
         - Key: Component
-          Value: WebMcCommunication
+          Value: ToMcCommunication
 
-  McToWebQueue:
+  ToWebQueue:
     Type: AWS::SQS::Queue
     Properties:
-      QueueName: kishax-mc-to-web-queue-v2
+      QueueName: kishax-to-web-queue-v2
       VisibilityTimeout: 300
       MessageRetentionPeriod: 1209600 # 14 days
       ReceiveMessageWaitTimeSeconds: 20
       RedrivePolicy:
-        deadLetterTargetArn: !GetAtt McToWebDeadLetterQueue.Arn
+        deadLetterTargetArn: !GetAtt ToWebDeadLetterQueue.Arn
         maxReceiveCount: 3
       Tags:
         - Key: Project
           Value: Kishax
         - Key: Component
-          Value: McWebCommunication
+          Value: ToWebCommunication
 
-  McToWebDeadLetterQueue:
+  ToWebDeadLetterQueue:
     Type: AWS::SQS::Queue
     Properties:
-      QueueName: kishax-mc-to-web-dlq-v2
+      QueueName: kishax-to-web-dlq-v2
       MessageRetentionPeriod: 1209600 # 14 days
       Tags:
         - Key: Project
           Value: Kishax
         - Key: Component
-          Value: McWebCommunication
+          Value: ToWebCommunication
 
   # ===========================================
-  # SSM Parameters (Note: /kishax/sqs/queue-url already exists)
+  # SSM Parameters (Note: updated to new naming convention)
   # Only update if needed, avoid creating duplicate
   # ===========================================
 
@@ -135,8 +135,8 @@ Resources:
               - "sqs:ReceiveMessage"
               - "sqs:DeleteMessage"
             Resource:
-              - !GetAtt McToWebQueue.Arn
-              - !GetAtt WebToMcQueue.Arn
+              - !GetAtt ToMcQueue.Arn
+              - !GetAtt ToWebQueue.Arn
       Users:
         - !Ref McWebSqsUser
 
@@ -344,8 +344,8 @@ Resources:
                   - sqs:SendMessage
                   - sqs:GetQueueAttributes
                 Resource:
-                  - !GetAtt WebToMcQueue.Arn
-                  - !GetAtt McToWebQueue.Arn
+                  - !GetAtt ToMcQueue.Arn
+                  - !GetAtt ToWebQueue.Arn
         - PolicyName: LogsAccess
           PolicyDocument:
             Version: "2012-10-17"
@@ -728,10 +728,10 @@ Resources:
               ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/kishax/mc-web-sqs/access-key-id"
             - Name: MC_WEB_SQS_SECRET_ACCESS_KEY
               ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/kishax/mc-web-sqs/secret-access-key"
-            - Name: MC_TO_WEB_QUEUE_URL
-              ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/kishax/web/mc-to-web-queue-url"
-            - Name: WEB_TO_MC_QUEUE_URL
-              ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/kishax/web/web-to-mc-queue-url"
+            - Name: TO_WEB_QUEUE_URL
+              ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/kishax/sqs/to-web-queue-url"
+            - Name: TO_MC_QUEUE_URL
+              ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/kishax/sqs/to-mc-queue-url"
 
             # Redis Configuration
             - Name: REDIS_URL
@@ -1023,8 +1023,8 @@ Resources:
               ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/kishax/discord/presence-activity"
             - Name: DISCORD_EMOJI_DEFAULT_NAME
               ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/kishax/discord/emoji-default-name"
-            - Name: SQS_QUEUE_URL
-              ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/kishax/sqs/queue-url"
+            - Name: TO_DISCORD_QUEUE_URL
+              ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/kishax/sqs/to-discord-queue-url"
           LogConfiguration:
             LogDriver: awslogs
             Options:
@@ -1067,30 +1067,30 @@ Outputs:
     Export:
       Name: !Sub "${AWS::StackName}-SqsQueueArn"
 
-  # Web-MC Communication SQS Outputs
-  WebToMcQueueUrl:
-    Description: Web to MC SQS Queue URL
-    Value: !Ref WebToMcQueue
+  # New naming: TO_* Queue Communication SQS Outputs
+  ToMcQueueUrl:
+    Description: TO MC SQS Queue URL
+    Value: !Ref ToMcQueue
     Export:
-      Name: !Sub "${AWS::StackName}-WebToMcQueueUrl"
+      Name: !Sub "${AWS::StackName}-ToMcQueueUrl"
 
-  WebToMcQueueArn:
-    Description: Web to MC SQS Queue ARN
-    Value: !GetAtt WebToMcQueue.Arn
+  ToMcQueueArn:
+    Description: TO MC SQS Queue ARN
+    Value: !GetAtt ToMcQueue.Arn
     Export:
-      Name: !Sub "${AWS::StackName}-WebToMcQueueArn"
+      Name: !Sub "${AWS::StackName}-ToMcQueueArn"
 
-  McToWebQueueUrl:
-    Description: MC to Web SQS Queue URL
-    Value: !Ref McToWebQueue
+  ToWebQueueUrl:
+    Description: TO Web SQS Queue URL
+    Value: !Ref ToWebQueue
     Export:
-      Name: !Sub "${AWS::StackName}-McToWebQueueUrl"
+      Name: !Sub "${AWS::StackName}-ToWebQueueUrl"
 
-  McToWebQueueArn:
-    Description: MC to Web SQS Queue ARN
-    Value: !GetAtt McToWebQueue.Arn
+  ToWebQueueArn:
+    Description: TO Web SQS Queue ARN
+    Value: !GetAtt ToWebQueue.Arn
     Export:
-      Name: !Sub "${AWS::StackName}-McToWebQueueArn"
+      Name: !Sub "${AWS::StackName}-ToWebQueueArn"
 
   # ECS Outputs
   EcsClusterArn:

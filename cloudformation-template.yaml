@@ -1025,6 +1025,8 @@ Resources:
               ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/kishax/discord/emoji-default-name"
             - Name: TO_DISCORD_QUEUE_URL
               ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/kishax/sqs/to-discord-queue-url"
+            - Name: REDIS_URL
+              ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/kishax/web/redis-url"
           LogConfiguration:
             LogDriver: awslogs
             Options:

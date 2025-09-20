@@ -4,7 +4,7 @@ set -e
 
 # Docker build & deploy用テンプレートスクリプト
 # 使用法: ./docker-deploy.sh <service> <ecr_repo> <cluster> <ecs_service> <profile> [region] [build_args]
-# service: サービス名 (discord-bot, gather-bot, web, auth, api)
+# service: サービス名 (discord, web, auth, api)
 # ecr_repo: ECRリポジトリURL
 # cluster: ECSクラスター名
 # ecs_service: ECSサービス名

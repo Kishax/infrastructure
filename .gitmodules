@@ -4,9 +4,6 @@
 [submodule "apps/web"]
 	path = apps/web
 	url = https://github.com/Kishax/kishax-web.git
-[submodule "apps/gather-bot"]
-	path = apps/gather
-	url = https://github.com/Kishax/gather-bot.git
 [submodule "apps/auth"]
 	path = apps/auth
 	url = https://github.com/Kishax/kishax-auth.git

@@ -311,7 +311,6 @@ Resources:
                   - !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/kishax/discord/*"
                   - !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/kishax/sqs/*"
                   - !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/kishax/web/*"
-                  - !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/kishax/gather/*"
                   - !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/kishax/slack/*"
                   - !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/kishax/auth/*"
                   - !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/kishax/oauth/*"
@@ -382,15 +381,6 @@ Resources:
     Type: AWS::Logs::LogGroup
     Properties:
       LogGroupName: /ecs/kishax-web-v2
-      RetentionInDays: 30
-      Tags:
-        - Key: Project
-          Value: Kishax
-
-  GatherBotLogGroup:
-    Type: AWS::Logs::LogGroup
-    Properties:
-      LogGroupName: /ecs/kishax-gather-bot-v2
       RetentionInDays: 30
       Tags:
         - Key: Project
@@ -921,65 +911,6 @@ Resources:
           Value: Auth
 
   # ===========================================
-  # Gather Bot ECS Resources
-  # ===========================================
-  GatherBotTaskDefinition:
-    Type: AWS::ECS::TaskDefinition
-    Properties:
-      Family: kishax-gather-bot-v2
-      NetworkMode: awsvpc
-      RequiresCompatibilities:
-        - FARGATE
-      Cpu: 256
-      Memory: 512
-      ExecutionRoleArn: !GetAtt EcsTaskExecutionRole.Arn
-      TaskRoleArn: !GetAtt EcsTaskRole.Arn
-      ContainerDefinitions:
-        - Name: gather-bot
-          Image: !Sub "${AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/kishax-gather-bot:latest"
-          Environment:
-            - Name: PORT
-              Value: "3000"
-            - Name: AWS_REGION
-              Value: !Ref AWS::Region
-            - Name: NODE_ENV
-              Value: "production"
-          Secrets:
-            - Name: GATHER_API_KEY
-              ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/kishax/gather/api-key"
-            - Name: GATHER_SPACE_ID
-              ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/kishax/gather/space-id"
-            - Name: SLACK_WEBHOOK_URL
-              ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/kishax/slack/webhook-url"
-          LogConfiguration:
-            LogDriver: awslogs
-            Options:
-              awslogs-group: !Ref GatherBotLogGroup
-              awslogs-region: !Ref AWS::Region
-              awslogs-stream-prefix: ecs
-      Tags:
-        - Key: Project
-          Value: Kishax
-
-  GatherBotService:
-    Type: AWS::ECS::Service
-    Properties:
-      ServiceName: kishax-gather-bot-service-v2
-      Cluster: !Ref EcsCluster
-      TaskDefinition: !Ref GatherBotTaskDefinition
-      DesiredCount: 0 # 一時的に停止
-      LaunchType: FARGATE
-      NetworkConfiguration:
-        AwsvpcConfiguration:
-          Subnets: !Ref PublicSubnetIds
-          SecurityGroups:
-            - !Ref EcsSecurityGroup
-          AssignPublicIp: ENABLED
-      Tags:
-        - Key: Project
-          Value: Kishax
-
-  # ===========================================
   # Discord Bot ECS Resources
   # ===========================================
   DiscordBotTaskDefinition:
@@ -1151,19 +1082,6 @@ Outputs:
     Value: !Ref WebTargetGroup
     Export:
       Name: !Sub "${AWS::StackName}-WebTargetGroupArn"
-
-  # Gather Bot ECS Outputs
-  GatherBotServiceArn:
-    Description: Gather Bot ECS Service ARN
-    Value: !Ref GatherBotService
-    Export:
-      Name: !Sub "${AWS::StackName}-GatherBotServiceArn"
-
-  GatherBotTaskDefinitionArn:
-    Description: Gather Bot Task Definition ARN
-    Value: !Ref GatherBotTaskDefinition
-    Export:
-      Name: !Sub "${AWS::StackName}-GatherBotTaskDefinitionArn"
 
   # Kishax API ECS Outputs
   KishaxApiServiceArn:

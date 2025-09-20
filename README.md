@@ -42,11 +42,6 @@ KishaX の統合インフラストラクチャプロジェクト
   │ (Velocity + │                                 │
   │  Spigot)    │─────────────────────────────────┘
   └─────────────┘
-
-  ┌─────────────┐    ┌──────────────┐
-  │ Gather Bot  │───→│  Slack API   │
-  │   (ECS)     │    │              │
-  └─────────────┘    └──────────────┘
 ```
 
 ## Tree
@@ -57,7 +52,6 @@ kishax/
 │   ├── api/               # 共通APIライブラリ (Java)
 │   ├── auth/              # カスタムIdP認証サービス (Keycloak/ECS)
 │   ├── discord/           # Discord Bot (ECS)
-│   ├── gather/            # Gather Bot (ECS)
 │   ├── mc/                # Minecraft プラグイン (Velocity + Spigot)
 │   └── web/               # Web アプリケーション (ECS)
 └── aws/                   # AWS共通リソース・ポリシー
@@ -68,7 +62,6 @@ kishax/
 
 - **Auth Service (Keycloak)**: カスタムIdP によるAWS コンソールSSO認証 (Keycloak/ECS)
 - **Discord Bot**: MinecraftイベントのDiscord通知 (Java/ECS)
-- **Gather Bot**: Gather.town監視とSlack通知 (Node.js/ECS)  
 - **Minecraft Plugins**: Velocity/Spigotプラグイン (Java)
 - **Web Application**: プレイヤー認証・管理 (Next.js/ECS)
 
@@ -169,8 +162,7 @@ make setup-prerequisites
 make deploy-all
 
 # 個別サービスデプロイ  
-make deploy-discord-bot
-make deploy-gather-bot
+make deploy-discord
 make deploy-web
 ```
 
@@ -180,7 +172,6 @@ make deploy-web
 - **API Service**: `kishax-api-service-v2` (256CPU/512MB)
 - **Auth Service**: `kishax-auth-service-v2` (512CPU/1024MB)
 - **Discord Bot**: `kishax-discord-bot-service-v2` (256CPU/512MB)
-- **Gather Bot**: `kishax-gather-bot-service-v2` (256CPU/512MB)  
 - **Web App**: `kishax-web-service-v2` (1024CPU/2048MB)
 
 ### Networking
@@ -198,7 +189,6 @@ make deploy-web
   - `/kishax/discord/*` - Discord Bot設定
   - `/kishax/web/*` - Web アプリ設定  
   - `/kishax/sqs/*` - SQS関連設定
-  - `/kishax/gather/*` - Gather Bot設定
   - `/kishax/slack/*` - Slack通知設定
   - `/kishax/redis/*` - Redis接続情報
   - `/kishax/mc/*` - MC プラグイン設定

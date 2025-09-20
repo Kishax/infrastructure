@@ -4,7 +4,6 @@ include .env
 
 # ECRリポジトリ
 AWS_ECR_DISCORD_BOT := $(AWS_ACCOUNT_ID).dkr.ecr.$(AWS_REGION).amazonaws.com/$(AWS_ECR_REPO_DISCORD_BOT_NAME)
-AWS_ECR_GATHER_BOT := $(AWS_ACCOUNT_ID).dkr.ecr.$(AWS_REGION).amazonaws.com/$(AWS_ECR_REPO_GATHER_BOT_NAME)
 AWS_ECR_WEB := $(AWS_ACCOUNT_ID).dkr.ecr.$(AWS_REGION).amazonaws.com/$(AWS_ECR_REPO_WEB_BOT_NAME)
 AWS_ECR_AUTH := $(AWS_ACCOUNT_ID).dkr.ecr.$(AWS_REGION).amazonaws.com/$(AWS_ECR_REPO_AUTH_NAME)
 AWS_ECR_API := $(AWS_ACCOUNT_ID).dkr.ecr.$(AWS_REGION).amazonaws.com/$(AWS_ECR_REPO_API_NAME)
@@ -160,7 +159,7 @@ status-services: ## ECSサービスステータスを確認
 	@echo "🏃 ECSサービスステータス確認中..."
 	aws ecs describe-services \
 		--cluster kishax-infrastructure-cluster \
-		--services kishax-discord-bot-service-v2 kishax-gather-bot-service-v2 kishax-web-service-v2 kishax-auth-service-v2 kishax-api-service-v2 \
+		--services kishax-discord-bot-service-v2 kishax-web-service-v2 kishax-auth-service-v2 kishax-api-service-v2 \
 		--profile $(AWS_PROFILE) \
 		--query 'services[].{ServiceName:serviceName,DesiredCount:desiredCount,RunningCount:runningCount,Status:status}' \
 		--output table
@@ -173,10 +172,6 @@ status-services: ## ECSサービスステータスを確認
 restart-discord: ## Discord Botサービスを再起動 (force-new-deployment)
 	@scripts/ecs-service.sh restart kishax-discord-bot-service-v2 kishax-infrastructure-cluster $(AWS_PROFILE)
 
-.PHONY: restart-gather-bot
-restart-gather-bot: ## Gather Botサービスを再起動 (force-new-deployment)
-	@scripts/ecs-service.sh restart kishax-gather-bot-service-v2 kishax-infrastructure-cluster $(AWS_PROFILE)
-
 .PHONY: restart-web
 restart-web: ## Webサービスを再起動 (force-new-deployment)
 	@scripts/ecs-service.sh restart kishax-web-service-v2 kishax-infrastructure-cluster $(AWS_PROFILE)
@@ -186,7 +181,7 @@ restart-auth: ## Authサービスを再起動 (force-new-deployment)
 	@scripts/ecs-service.sh restart kishax-auth-service-v2 kishax-infrastructure-cluster $(AWS_PROFILE)
 
 .PHONY: restart-all-services
-restart-all-services: restart-discord restart-gather-bot restart-web restart-auth ## 全ECSサービスを再起動 (force-new-deployment)
+restart-all-services: restart-discord restart-web restart-auth ## 全ECSサービスを再起動 (force-new-deployment)
 	@echo "✅ 全サービスの再起動を要求しました"
 
 # =============================================================================
@@ -196,10 +191,6 @@ restart-all-services: restart-discord restart-gather-bot restart-web restart-aut
 .PHONY: enable-discord
 enable-discord: ## Discord Botサービスを有効化 (desired-count=1)
 	@scripts/ecs-service.sh enable kishax-discord-bot-service-v2 kishax-infrastructure-cluster $(AWS_PROFILE)
-
-.PHONY: enable-gather-bot
-enable-gather-bot: ## Gather Botサービスを有効化 (desired-count=1)
-	@scripts/ecs-service.sh enable kishax-gather-bot-service-v2 kishax-infrastructure-cluster $(AWS_PROFILE)
 
 .PHONY: enable-web
 enable-web: ## Webサービスを有効化 (desired-count=1)
@@ -214,16 +205,12 @@ enable-api: ## APIサービスを有効化 (desired-count=1)
 	@scripts/ecs-service.sh enable kishax-api-service-v2 kishax-infrastructure-cluster $(AWS_PROFILE)
 
 .PHONY: enable-all-services
-enable-all-services: enable-discord enable-gather-bot enable-web enable-auth enable-api ## 全ECSサービスを有効化
+enable-all-services: enable-discord enable-web enable-auth enable-api ## 全ECSサービスを有効化
 	@echo "✅ 全サービスの有効化を完了しました"
 
 .PHONY: disable-discord
 disable-discord: ## Discord Botサービスを無効化 (desired-count=0)
 	@scripts/ecs-service.sh disable kishax-discord-bot-service-v2 kishax-infrastructure-cluster $(AWS_PROFILE)
-
-.PHONY: disable-gather-bot
-disable-gather-bot: ## Gather Botサービスを無効化 (desired-count=0)
-	@scripts/ecs-service.sh disable kishax-gather-bot-service-v2 kishax-infrastructure-cluster $(AWS_PROFILE)
 
 .PHONY: disable-web
 disable-web: ## Webサービスを無効化 (desired-count=0)
@@ -238,7 +225,7 @@ disable-api: ## APIサービスを無効化 (desired-count=0)
 	@scripts/ecs-service.sh disable kishax-api-service-v2 kishax-infrastructure-cluster $(AWS_PROFILE)
 
 .PHONY: disable-all-services
-disable-all-services: disable-discord disable-gather-bot disable-web disable-auth disable-api ## 全ECSサービスを無効化
+disable-all-services: disable-discord disable-web disable-auth disable-api ## 全ECSサービスを無効化
 	@echo "✅ 全サービスの無効化を完了しました"
 
 # =============================================================================
@@ -249,10 +236,6 @@ disable-all-services: disable-discord disable-gather-bot disable-web disable-aut
 start-discord: ## Discord Bot停止中サービスを開始
 	@scripts/ecs-service.sh start kishax-discord-bot-service-v2 kishax-infrastructure-cluster $(AWS_PROFILE)
 
-.PHONY: start-gather-bot
-start-gather-bot: ## Gather Bot停止中サービスを開始
-	@scripts/ecs-service.sh start kishax-gather-bot-service-v2 kishax-infrastructure-cluster $(AWS_PROFILE)
-
 .PHONY: start-web
 start-web: ## Web停止中サービスを開始
 	@scripts/ecs-service.sh start kishax-web-service-v2 kishax-infrastructure-cluster $(AWS_PROFILE)
@@ -262,16 +245,12 @@ start-auth: ## Auth停止中サービスを開始
 	@scripts/ecs-service.sh start kishax-auth-service-v2 kishax-infrastructure-cluster $(AWS_PROFILE)
 
 .PHONY: start-all-services
-start-all-services: start-discord start-gather-bot start-web start-auth ## 全停止中サービスを開始
+start-all-services: start-discord start-web start-auth ## 全停止中サービスを開始
 	@echo "✅ 全サービスの開始チェックを完了しました"
 
 .PHONY: stop-discord
 stop-discord: ## Discord Bot実行中タスクを即座に停止
 	@scripts/ecs-service.sh stop kishax-discord-bot-service-v2 kishax-infrastructure-cluster $(AWS_PROFILE)
-
-.PHONY: stop-gather-bot
-stop-gather-bot: ## Gather Bot実行中タスクを即座に停止
-	@scripts/ecs-service.sh stop kishax-gather-bot-service-v2 kishax-infrastructure-cluster $(AWS_PROFILE)
 
 .PHONY: stop-web
 stop-web: ## Web実行中タスクを即座に停止
@@ -282,7 +261,7 @@ stop-auth: ## Auth実行中タスクを即座に停止
 	@scripts/ecs-service.sh stop kishax-auth-service-v2 kishax-infrastructure-cluster $(AWS_PROFILE)
 
 .PHONY: stop-all-services
-stop-all-services: stop-discord stop-gather-bot stop-web stop-auth ## 全実行中タスクを即座に停止
+stop-all-services: stop-discord stop-web stop-auth ## 全実行中タスクを即座に停止
 	@echo "✅ 全タスクの停止を完了しました"
 
 .PHONY: cancel-stack-update
@@ -298,16 +277,12 @@ cancel-stack-update: ## CloudFormationスタック更新をキャンセル
 ## =============================================================================
 
 .PHONY: deploy-all
-deploy-all: deploy-discord deploy-gather-bot deploy-web deploy-auth deploy-api ## 全サービスをデプロイ
+deploy-all: deploy-discord deploy-web deploy-auth deploy-api ## 全サービスをデプロイ
 	@echo "✅ 全サービスのデプロイが完了しました"
 
 .PHONY: deploy-discord
 deploy-discord: ## Discordをデプロイ
 	@scripts/docker-deploy.sh discord $(AWS_ECR_DISCORD_BOT) kishax-infrastructure-cluster kishax-discord-bot-service-v2 $(AWS_PROFILE) $(AWS_REGION)
-
-.PHONY: deploy-gather-bot
-deploy-gather-bot: ## Gather Botをデプロイ
-	@scripts/docker-deploy.sh gather $(AWS_ECR_GATHER_BOT) kishax-infrastructure-cluster kishax-gather-bot-service-v2 $(AWS_PROFILE) $(AWS_REGION)
 
 .PHONY: deploy-web
 deploy-web: ## Web アプリケーションをデプロイ
@@ -385,10 +360,6 @@ test-sqs-queues: ## SQSキュー状態確認
 logs-discord: ## Discord Botログを表示
 	aws logs tail /ecs/kishax-discord-bot-v2 --follow --profile $(AWS_PROFILE)
 
-.PHONY: logs-gather-bot
-logs-gather-bot: ## Gather Botログを表示
-	aws logs tail /ecs/kishax-gather-bot-v2 --follow --profile $(AWS_PROFILE)
-
 .PHONY: logs-web
 logs-web: ## Web アプリケーションログを表示
 	aws logs tail /ecs/kishax-web-v2 --follow --profile $(AWS_PROFILE)
@@ -400,12 +371,6 @@ status-ecs: ## ECSサービス状態を確認
 	aws ecs describe-services \
 		--cluster kishax-infrastructure-cluster \
 		--services kishax-discord-bot-service-v2 \
-		--query 'services[0].{Status:status,Running:runningCount,Desired:desiredCount}' \
-		--profile $(AWS_PROFILE)
-	@echo "\n👥 Gather Bot:"
-	aws ecs describe-services \
-		--cluster kishax-infrastructure-cluster \
-		--services kishax-gather-bot-service-v2 \
 		--query 'services[0].{Status:status,Running:runningCount,Desired:desiredCount}' \
 		--profile $(AWS_PROFILE)
 	@echo "\n🌐 Web Application:"

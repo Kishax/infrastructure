@@ -13,7 +13,6 @@
       "Resource": [
         "arn:aws:ssm:$(AWS_REGION):$(AWS_ACCOUNT_ID):parameter/kishax/discord/*",
         "arn:aws:ssm:$(AWS_REGION):$(AWS_ACCOUNT_ID):parameter/kishax/sqs/*",
-        "arn:aws:ssm:$(AWS_REGION):$(AWS_ACCOUNT_ID):parameter/kishax/gather/*",
         "arn:aws:ssm:$(AWS_REGION):$(AWS_ACCOUNT_ID):parameter/kishax/slack/*",
         "arn:aws:ssm:$(AWS_REGION):$(AWS_ACCOUNT_ID):parameter/kishax/web/*"
       ]

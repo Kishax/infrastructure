@@ -45,16 +45,6 @@
     "Type": "SecureString"
   },
   {
-    "Name": "/kishax/gather/api-key",
-    "Value": "YOUR_VALUE_HERE",
-    "Type": "SecureString"
-  },
-  {
-    "Name": "/kishax/gather/space-id",
-    "Value": "YOUR_VALUE_HERE",
-    "Type": "SecureString"
-  },
-  {
     "Name": "/kishax/slack/webhook-url",
     "Value": "YOUR_VALUE_HERE",
     "Type": "SecureString"

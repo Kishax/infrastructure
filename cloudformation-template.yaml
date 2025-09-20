@@ -137,6 +137,7 @@ Resources:
             Resource:
               - !GetAtt ToMcQueue.Arn
               - !GetAtt ToWebQueue.Arn
+              - !GetAtt DiscordQueue.Arn
       Users:
         - !Ref McWebSqsUser
 

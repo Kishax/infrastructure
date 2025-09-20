@@ -60,8 +60,8 @@
     "Type": "SecureString"
   },
   {
-    "Name": "/kishax/sqs/queue-url",
-    "Value": "YOUR_VALUE_HERE",
+    "Name": "/kishax/sqs/to-discord-queue-url",
+    "Value": "YOUR_TO_DISCORD_QUEUE_URL",
     "Type": "SecureString"
   },
   {
@@ -140,18 +140,13 @@
     "Type": "SecureString"
   },
   {
-    "Name": "/kishax/sqs/web-to-mc-queue-url",
-    "Value": "YOUR_VALUE_HERE",
+    "Name": "/kishax/sqs/to-mc-queue-url",
+    "Value": "YOUR_TO_MC_QUEUE_URL",
     "Type": "String"
   },
   {
-    "Name": "/kishax/sqs/mc-to-web-queue-url",
-    "Value": "YOUR_VALUE_HERE",
-    "Type": "String"
-  },
-  {
-    "Name": "/kishax/web/web-to-mc-queue-url",
-    "Value": "YOUR_VALUE_HERE",
+    "Name": "/kishax/sqs/to-web-queue-url",
+    "Value": "YOUR_TO_WEB_QUEUE_URL",
     "Type": "String"
   },
   {
@@ -168,11 +163,6 @@
     "Name": "/kishax/web/mc-web-sqs-secret-access-key",
     "Value": "YOUR_VALUE_HERE",
     "Type": "SecureString"
-  },
-  {
-    "Name": "/kishax/web/mc-to-web-queue-url",
-    "Value": "YOUR_VALUE_HERE",
-    "Type": "String"
   },
   {
     "Name": "/kishax/oauth/github-client-id",

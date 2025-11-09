@@ -240,49 +240,52 @@ Resources:
   # ===========================================
   # ElastiCache Resources (Redis)
   # ===========================================
-  RedisSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupDescription: "Security group for Redis ElastiCache cluster"
-      VpcId: !Ref VpcId
-      SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 6379
-          ToPort: 6379
-          SourceSecurityGroupId: !Ref EcsSecurityGroup
-          Description: "Allow Redis traffic from ECS tasks"
-      Tags:
-        - Key: Name
-          Value: kishax-redis-sg
-        - Key: Project
-          Value: Kishax
+  # COMMENTED OUT: Redis resources to stop ElastiCache billing
+  # Uncomment when you need to re-enable Redis
+  # Date: 2025-11-09
+  # RedisSecurityGroup:
+  #   Type: AWS::EC2::SecurityGroup
+  #   Properties:
+  #     GroupDescription: "Security group for Redis ElastiCache cluster"
+  #     VpcId: !Ref VpcId
+  #     SecurityGroupIngress:
+  #       - IpProtocol: tcp
+  #         FromPort: 6379
+  #         ToPort: 6379
+  #         SourceSecurityGroupId: !Ref EcsSecurityGroup
+  #         Description: "Allow Redis traffic from ECS tasks"
+  #     Tags:
+  #       - Key: Name
+  #         Value: kishax-redis-sg
+  #       - Key: Project
+  #         Value: Kishax
 
-  RedisSubnetGroup:
-    Type: AWS::ElastiCache::SubnetGroup
-    Properties:
-      Description: "Subnet group for Redis ElastiCache cluster"
-      SubnetIds: !Ref SubnetIds # Use private subnets
-      Tags:
-        - Key: Project
-          Value: Kishax
+  # RedisSubnetGroup:
+  #   Type: AWS::ElastiCache::SubnetGroup
+  #   Properties:
+  #     Description: "Subnet group for Redis ElastiCache cluster"
+  #     SubnetIds: !Ref SubnetIds # Use private subnets
+  #     Tags:
+  #       - Key: Project
+  #         Value: Kishax
 
-  RedisReplicationGroup:
-    Type: AWS::ElastiCache::ReplicationGroup
-    Properties:
-      ReplicationGroupId: kishax-web-redis
-      ReplicationGroupDescription: "Redis cluster for kishax-web"
-      Engine: redis
-      CacheNodeType: cache.t4g.small
-      NumNodeGroups: 1
-      ReplicasPerNodeGroup: 0 # Single node for now. Increase for HA.
-      AutomaticFailoverEnabled: false
-      CacheSubnetGroupName: !Ref RedisSubnetGroup
-      SecurityGroupIds:
-        - !Ref RedisSecurityGroup
-      Port: 6379
-      Tags:
-        - Key: Project
-          Value: Kishax
+  # RedisReplicationGroup:
+  #   Type: AWS::ElastiCache::ReplicationGroup
+  #   Properties:
+  #     ReplicationGroupId: kishax-web-redis
+  #     ReplicationGroupDescription: "Redis cluster for kishax-web"
+  #     Engine: redis
+  #     CacheNodeType: cache.t4g.small
+  #     NumNodeGroups: 1
+  #     ReplicasPerNodeGroup: 0 # Single node for now. Increase for HA.
+  #     AutomaticFailoverEnabled: false
+  #     CacheSubnetGroupName: !Ref RedisSubnetGroup
+  #     SecurityGroupIds:
+  #       - !Ref RedisSecurityGroup
+  #     Port: 6379
+  #     Tags:
+  #       - Key: Project
+  #         Value: Kishax
 
   # Task Execution Role (for ECS tasks)
   EcsTaskExecutionRole:
@@ -398,16 +401,19 @@ Resources:
   # ===========================================
   # Web ECS Resources
   # ===========================================
-  RedisUrlSsm:
-    Type: AWS::SSM::Parameter
-    Properties:
-      Name: /kishax/web/redis-url
-      Description: "Redis connection URL for the web application"
-      Type: String
-      Value: !Sub "redis://${RedisReplicationGroup.PrimaryEndPoint.Address}:${RedisReplicationGroup.PrimaryEndPoint.Port}"
-      Tags:
-        Project: Kishax
-        Component: Web
+  # COMMENTED OUT: Redis URL SSM Parameter (depends on RedisReplicationGroup)
+  # Uncomment when Redis is re-enabled
+  # Date: 2025-11-09
+  # RedisUrlSsm:
+  #   Type: AWS::SSM::Parameter
+  #   Properties:
+  #     Name: /kishax/web/redis-url
+  #     Description: "Redis connection URL for the web application"
+  #     Type: String
+  #     Value: !Sub "redis://${RedisReplicationGroup.PrimaryEndPoint.Address}:${RedisReplicationGroup.PrimaryEndPoint.Port}"
+  #     Tags:
+  #       Project: Kishax
+  #       Component: Web
 
   WebTaskDefinition:
     Type: AWS::ECS::TaskDefinition
@@ -466,8 +472,9 @@ Resources:
               ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/kishax/web/email-pass"
             - Name: EMAIL_FROM
               ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/kishax/web/email-from"
-            - Name: REDIS_URL
-              ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/kishax/web/redis-url"
+            # COMMENTED OUT: Redis URL reference (Redis is disabled)
+            # - Name: REDIS_URL
+            #   ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/kishax/web/redis-url"
             - Name: INTERNAL_API_KEY
               ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/kishax/web/internal-api-key"
           LogConfiguration:
@@ -683,10 +690,11 @@ Resources:
             # AWS SQS Configuration
             - Name: AWS_REGION
               Value: !Ref AWS::Region
-            - Name: REDIS_CONNECTION_TIMEOUT
-              Value: "5000"
-            - Name: REDIS_COMMAND_TIMEOUT
-              Value: "3000"
+            # COMMENTED OUT: Redis configuration (Redis is disabled)
+            # - Name: REDIS_CONNECTION_TIMEOUT
+            #   Value: "5000"
+            # - Name: REDIS_COMMAND_TIMEOUT
+            #   Value: "3000"
 
             # SQS Worker Configuration
             - Name: QUEUE_MODE
@@ -724,9 +732,9 @@ Resources:
             - Name: TO_MC_QUEUE_URL
               ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/kishax/sqs/to-mc-queue-url"
 
-            # Redis Configuration
-            - Name: REDIS_URL
-              ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/kishax/web/redis-url"
+            # COMMENTED OUT: Redis Configuration (Redis is disabled)
+            # - Name: REDIS_URL
+            #   ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/kishax/web/redis-url"
           LogConfiguration:
             LogDriver: awslogs
             Options:
@@ -957,8 +965,9 @@ Resources:
               ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/kishax/discord/emoji-default-name"
             - Name: TO_DISCORD_QUEUE_URL
               ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/kishax/sqs/to-discord-queue-url"
-            - Name: REDIS_URL
-              ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/kishax/web/redis-url"
+            # COMMENTED OUT: Redis URL reference (Redis is disabled)
+            # - Name: REDIS_URL
+            #   ValueFrom: !Sub "arn:aws:ssm:${AWS::Region}:${AccountId}:parameter/kishax/web/redis-url"
           LogConfiguration:
             LogDriver: awslogs
             Options:

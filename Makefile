@@ -164,6 +164,23 @@ status-services: ## ECSサービスステータスを確認
 		--query 'services[].{ServiceName:serviceName,DesiredCount:desiredCount,RunningCount:runningCount,Status:status}' \
 		--output table
 
+.PHONY: status-elasticache
+status-elasticache: ## ElastiCacheの存在確認
+	@echo "🔍 ElastiCacheレプリケーショングループの確認中..."
+	@if aws elasticache describe-replication-groups \
+		--profile $(AWS_PROFILE) \
+		--region $(AWS_REGION) \
+		--query 'ReplicationGroups[*].{ID:ReplicationGroupId,Status:Status,NodeType:CacheNodeType,Engine:Engine}' \
+		--output table 2>&1 | grep -q "ReplicationGroups"; then \
+		aws elasticache describe-replication-groups \
+			--profile $(AWS_PROFILE) \
+			--region $(AWS_REGION) \
+			--query 'ReplicationGroups[*].{ID:ReplicationGroupId,Status:Status,NodeType:CacheNodeType,Engine:Engine}' \
+			--output table; \
+	else \
+		echo "✅ ElastiCacheレプリケーショングループは存在しません（課金なし）"; \
+	fi
+
 # =============================================================================
 # サービス再起動 (force-new-deployment)
 # =============================================================================

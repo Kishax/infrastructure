@@ -11,8 +11,7 @@ vpc_cidr = "10.0.0.0/16"
 # Route53
 route53_zone_id = "Z0123456789ABCDEFGHIJ"  # Replace with your hosted zone ID
 mc_domain_name  = "mc.kishax.net"
-web_domain_name = "web.kishax.net"
-api_domain_name = "api.kishax.net"
+web_domain_name = "kishax.net"  # Root domain or subdomain
 
 # RDS PostgreSQL
 postgres_instance_class    = "db.t4g.micro"

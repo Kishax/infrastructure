@@ -40,13 +40,7 @@ variable "mc_domain_name" {
 variable "web_domain_name" {
   description = "Web application domain name"
   type        = string
-  default     = "web.kishax.net"
-}
-
-variable "api_domain_name" {
-  description = "API domain name"
-  type        = string
-  default     = "api.kishax.net"
+  default     = "kishax.net"
 }
 
 # RDS PostgreSQL Configuration

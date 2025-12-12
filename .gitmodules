@@ -4,9 +4,6 @@
 [submodule "apps/web"]
 	path = apps/web
 	url = https://github.com/Kishax/kishax-web.git
-[submodule "apps/auth"]
-	path = apps/auth
-	url = https://github.com/Kishax/kishax-auth.git
 [submodule "apps/mc"]
 	path = apps/mc
 	url = https://github.com/Kishax/kishax.git

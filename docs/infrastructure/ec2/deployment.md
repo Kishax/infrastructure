@@ -474,7 +474,39 @@ aws ssm start-session \
 ssh -i /Users/tk/git/Kishax/infrastructure/minecraft.pem -p 2222 ec2-user@localhost
 ```
 
-**トラブルシューティング（Permission denied エラー）**:
+**トラブルシューティング**:
+
+#### 1. SSH Known Hosts エラー（EC2再作成時）
+
+EC2インスタンスが再作成された後、以下のエラーが発生します：
+
+```
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+@    WARNING: REMOTE HOST IDENTIFICATION HAS CHANGED!     @
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+Offending ECDSA key in /Users/tk/.ssh/known_hosts:18
+Host key for [localhost]:2222 has changed and you have requested strict checking.
+Host key verification failed.
+```
+
+**原因**: EC2インスタンスが再作成されたため、ホストキー（フィンガープリント）が変わった。
+
+**対処法**:
+
+```bash
+# 方法1: sedで該当行を削除（推奨）
+# エラーメッセージの行番号（例: 18）を指定
+sed -i '' '18d' ~/.ssh/known_hosts
+
+# 方法2: ssh-keygenで削除
+ssh-keygen -R "[localhost]:2222"
+
+# 再度SSH接続
+ssh -i /Users/tk/git/Kishax/infrastructure/minecraft.pem -p 2222 ec2-user@localhost
+# 初回接続時に "yes" と入力して新しいホストキーを登録
+```
+
+#### 2. Permission denied エラー
 
 1. **キーペア名を確認**:
    ```bash

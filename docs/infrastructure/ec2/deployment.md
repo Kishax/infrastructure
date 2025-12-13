@@ -85,11 +85,11 @@ cd /Users/tk/git/Kishax/infrastructure/terraform
 terraform output
 
 # 必要な情報を環境変数にエクスポート
-export RDS_POSTGRES_ENDPOINT=$(terraform output -raw rds_postgres_endpoint)
-export RDS_MYSQL_ENDPOINT=$(terraform output -raw rds_mysql_endpoint)
+export RDS_POSTGRES_ENDPOINT=$(terraform output -raw postgres_endpoint)
+export RDS_MYSQL_ENDPOINT=$(terraform output -raw mysql_endpoint)
 export TO_WEB_QUEUE_URL=$(terraform output -raw to_web_queue_url)
 export TO_MC_QUEUE_URL=$(terraform output -raw to_mc_queue_url)
-export TO_DISCORD_QUEUE_URL=$(terraform output -raw to_discord_queue_url)
+export TO_DISCORD_QUEUE_URL=$(terraform output -raw discord_queue_url)
 export API_SERVER_PRIVATE_IP=$(terraform output -raw api_server_private_ip)
 ```
 
@@ -151,13 +151,13 @@ aws ssm get-parameter \
 
 ```bash
 # i-b (API Server)
-export INSTANCE_ID_B=$(terraform output -raw api_server_id)
+export INSTANCE_ID_B=$(terraform output -raw api_server_instance_id)
 
 # i-c (Web Server)
-export INSTANCE_ID_C=$(terraform output -raw web_server_id)
+export INSTANCE_ID_C=$(terraform output -raw web_server_instance_id)
 
 # i-a (MC Server)
-export INSTANCE_ID_A=$(terraform output -raw mc_server_id)
+export INSTANCE_ID_A=$(terraform output -raw mc_server_instance_id)
 
 # 確認
 echo "i-b: $INSTANCE_ID_B"
@@ -809,7 +809,7 @@ aws ec2 start-instances \
 # i-d（Jump Server）の起動（DB管理時）
 aws ec2 start-instances \
   --profile AdministratorAccess-126112056177 \
-  --instance-ids $(terraform output -raw jump_server_id)
+  --instance-ids $(terraform output -raw jump_server_instance_id)
 ```
 
 ---

@@ -327,9 +327,52 @@ docker-compose logs -f
 
 ### i-b: API Server
 
+#### 0. 事前準備：アプリケーションのビルド
+
+i-bでは **Javaアプリケーション（Maven）** を動かすため、事前にJARファイルをビルドする必要があります。
+
+**ビルド方法**:
+
+```bash
+# ローカル環境でビルド（開発マシン）
+cd /path/to/apps/api
+
+# Mavenでビルド（JARファイル生成）
+mvn clean package -DskipTests
+
+# 生成されるJARファイル
+# - sqs-redis-bridge/target/sqs-redis-bridge-*-with-dependencies.jar
+# - mc-auth/target/mc-auth-*-with-dependencies.jar
+
+# JARファイルの確認
+ls -lh sqs-redis-bridge/target/*.jar
+ls -lh mc-auth/target/*.jar
+```
+
+**EC2へのデプロイ方法**:
+
+方法1: **Dockerビルド時に自動ビルド**（推奨）
+- Dockerfileが自動的にMavenビルドを実行
+- ソースコードをEC2にコピーして`docker-compose build`
+
+方法2: **事前ビルド済みJARをコピー**
+- ローカルでビルドしたJARをEC2にSCP/rsync
+- Dockerfileのビルドステップをスキップ
+
+**注意**: Dockerfileは元々`supervisord`で2サービスを1コンテナで起動する設計ですが、compose.yamlでは分離しています。
+そのため、**Dockerfileの修正が必要**です。
+
 #### 1. compose.yamlの修正
 
 **修正後のcompose.yaml** (`apps/api/compose-ec2.yaml`):
+
+> **重要**: 元のDockerfileは`supervisord`で2サービスを1コンテナで起動する設計です。  
+> compose.yamlで分離する場合、以下2つの対応が必要です：
+> 
+> **対応A**: Dockerfileを各サービス専用に分割（`Dockerfile.mc-auth`, `Dockerfile.sqs-redis-bridge`）  
+> **対応B**: compose.yamlで`command`を上書きして個別起動（簡易的）
+> 
+> ここでは**対応B**を採用します。
 
 ```yaml
 services:
@@ -433,6 +476,61 @@ services:
     restart: unless-stopped
 ```
 
+**補足: Dockerfileの分割（推奨）**
+
+本番環境では、各サービス専用のDockerfileを作成することを推奨します：
+
+**`Dockerfile.sqs-redis-bridge`**:
+```dockerfile
+FROM eclipse-temurin:21-jdk AS builder
+RUN apt-get update && apt-get install -y maven && rm -rf /var/lib/apt/lists/*
+WORKDIR /app
+COPY . .
+RUN mvn clean package -DskipTests
+
+FROM eclipse-temurin:21-jre
+WORKDIR /app
+COPY --from=builder /app/sqs-redis-bridge/target/sqs-redis-bridge-*-with-dependencies.jar sqs-redis-bridge.jar
+RUN groupadd -r appuser && useradd -r -g appuser appuser && chown -R appuser:appuser /app
+USER appuser
+CMD ["java", "-jar", "/app/sqs-redis-bridge.jar"]
+```
+
+**`Dockerfile.mc-auth`**:
+```dockerfile
+FROM eclipse-temurin:21-jdk AS builder
+RUN apt-get update && apt-get install -y maven && rm -rf /var/lib/apt/lists/*
+WORKDIR /app
+COPY . .
+RUN mvn clean package -DskipTests
+
+FROM eclipse-temurin:21-jre
+WORKDIR /app
+COPY --from=builder /app/mc-auth/target/mc-auth-*-with-dependencies.jar mc-auth.jar
+RUN groupadd -r appuser && useradd -r -g appuser appuser && chown -R appuser:appuser /app
+USER appuser
+EXPOSE 8080
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
+  CMD curl -f http://localhost:8080/health || exit 1
+CMD ["java", "-jar", "/app/mc-auth.jar"]
+```
+
+compose.yamlで使用：
+```yaml
+services:
+  sqs-redis-bridge:
+    build:
+      context: .
+      dockerfile: Dockerfile.sqs-redis-bridge
+    # ... rest of config
+  
+  mc-auth:
+    build:
+      context: .
+      dockerfile: Dockerfile.mc-auth
+    # ... rest of config
+```
+
 #### 2. .envファイル作成
 
 ```bash
@@ -496,6 +594,13 @@ chmod 600 .env
 # compose.yamlをコピー
 cp /path/to/apps/api/compose-ec2.yaml docker-compose.yml
 
+# オプション1: ソースコードからビルド（初回）
+docker-compose build
+
+# オプション2: 事前ビルド済みJARを使用
+# （ローカルでビルドしたJARをEC2にコピー済みの場合）
+# Dockerfileでビルドスキップ条件が満たされる
+
 # 起動
 docker-compose up -d
 
@@ -505,6 +610,11 @@ docker-compose logs -f
 # 各サービスの状態確認
 docker-compose ps
 # mc-auth, sqs-redis-bridge, discord-bot が全てUpであることを確認
+
+# 個別サービスのログ確認
+docker-compose logs -f mc-auth
+docker-compose logs -f sqs-redis-bridge
+docker-compose logs -f discord-bot
 ```
 
 ---

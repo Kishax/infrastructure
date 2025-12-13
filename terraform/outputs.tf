@@ -113,3 +113,16 @@ output "sqs_secret_access_key_parameter" {
   description = "SSM Parameter name for SQS Secret Access Key"
   value       = module.iam.sqs_secret_access_key_ssm_parameter
 }
+
+# SQS Access Credentials (actual values)
+output "sqs_access_key_id" {
+  description = "SQS Access Key ID"
+  value       = module.iam.sqs_access_key_id
+  sensitive   = true
+}
+
+output "sqs_secret_access_key" {
+  description = "SQS Secret Access Key"
+  value       = module.iam.sqs_secret_access_key
+  sensitive   = true
+}

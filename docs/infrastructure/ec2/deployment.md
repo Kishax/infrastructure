@@ -130,7 +130,7 @@ export TO_DISCORD_QUEUE_URL=$(terraform output -raw discord_queue_url)
 export API_SERVER_PRIVATE_IP=$(terraform output -raw api_server_private_ip)
 ```
 
-### 2. SSM Parameter Storeに機密情報を保存
+### 2. 機密情報の取得
 
 #### SQS認証情報（Terraformで自動作成済み）
 
@@ -143,19 +143,26 @@ Terraform適用時に以下が自動的に作成されます：
   - `/kishax/production/sqs/access-key-id`
   - `/kishax/production/sqs/secret-access-key`
 
-確認方法：
+**SQS認証情報の取得**（`.env`ファイル生成時に使用）：
 ```bash
-# SSM Parameterが作成されているか確認
-aws ssm get-parameter \
+# SQS Access Key IDを取得
+export MC_WEB_SQS_ACCESS_KEY_ID=$(aws ssm get-parameter \
   --profile AdministratorAccess-126112056177 \
   --name "/kishax/production/sqs/access-key-id" \
   --query "Parameter.Value" \
-  --output text
+  --output text)
 
-# Terraform outputsで確認
-cd terraform
-terraform output sqs_access_key_id_parameter
-terraform output sqs_secret_access_key_parameter
+# SQS Secret Access Keyを取得
+export MC_WEB_SQS_SECRET_ACCESS_KEY=$(aws ssm get-parameter \
+  --profile AdministratorAccess-126112056177 \
+  --name "/kishax/production/sqs/secret-access-key" \
+  --with-decryption \
+  --query "Parameter.Value" \
+  --output text)
+
+# 確認
+echo "Access Key ID: $MC_WEB_SQS_ACCESS_KEY_ID"
+echo "Secret Access Key: ${MC_WEB_SQS_SECRET_ACCESS_KEY:0:10}..." # 最初の10文字のみ表示
 ```
 
 > **Note**: 旧環境でSQS用のIAMユーザーがある場合は、事前に削除してください：
@@ -169,36 +176,28 @@ terraform output sqs_secret_access_key_parameter
 > aws iam delete-user --user-name OLD_SQS_USER --profile AdministratorAccess-126112056177
 > ```
 
-#### Discord Bot認証情報の保存
+#### その他の機密情報（.envファイルに直接記載）
 
+以下の機密情報は**各インスタンスの`.env`ファイルに直接記載**してください：
+
+- **Discord Bot Token**: Discord Developer Portalから取得
+- **RDSパスワード**: `terraform.tfvars`から取得
+  - PostgreSQL: `postgres_password`の値
+  - MySQL: `mysql_password`の値
+- **OAuth Client Secrets**: 各プロバイダーのDeveloper Consoleから取得
+  - Google、Discord、Twitter
+- **Auth API Key**: 新規生成（例: `openssl rand -base64 32`）
+- **NEXTAUTH_SECRET**: 新規生成（例: `openssl rand -base64 32`）
+- **Email SMTP Password**: メールプロバイダーから取得
+
+**セキュリティ対策**:
 ```bash
-# Discord Bot Tokenを保存
-aws ssm put-parameter \
-  --profile AdministratorAccess-126112056177 \
-  --name "/kishax/production/discord/bot-token" \
-  --value "YOUR_DISCORD_BOT_TOKEN" \
-  --type "SecureString" \
-  --overwrite
-```
+# .envファイルのパーミッション設定
+chmod 600 /opt/*/. env
+chown ec2-user:ec2-user /opt/*/.env
 
-#### RDS認証情報の確認
-
-```bash
-# RDS PostgreSQLパスワード
-aws ssm get-parameter \
-  --profile AdministratorAccess-126112056177 \
-  --name "/kishax/production/rds/postgres/password" \
-  --with-decryption \
-  --query "Parameter.Value" \
-  --output text
-
-# RDS MySQLパスワード
-aws ssm get-parameter \
-  --profile AdministratorAccess-126112056177 \
-  --name "/kishax/production/rds/mysql/password" \
-  --with-decryption \
-  --query "Parameter.Value" \
-  --output text
+# .gitignoreに.envが含まれていることを確認
+grep -r "^\.env$" /opt/*/.gitignore
 ```
 
 ### 3. EC2インスタンスIDを取得
@@ -292,22 +291,23 @@ git clone https://github.com/Kishax/api.git .
 ```bash
 cd /opt/api
 
-# SSM Parameter Storeから認証情報を取得して.envファイル生成
-cat > .env << 'EOF'
+# .envファイル生成
+cat > .env << EOF
 # ===================================
 # API Server Configuration (i-b, EC2)
 # ===================================
 
 # Database Configuration (RDS PostgreSQL)
-DATABASE_URL=jdbc:postgresql://RDS_POSTGRES_ENDPOINT:5432/kishax?user=postgres&password=RDS_POSTGRES_PASSWORD
+# terraform.tfvarsのpostgres_passwordを使用
+DATABASE_URL=jdbc:postgresql://${RDS_POSTGRES_ENDPOINT}:5432/kishax?user=postgres&password=YOUR_POSTGRES_PASSWORD_HERE
 
 # AWS SQS Configuration
 AWS_REGION=ap-northeast-1
-MC_WEB_SQS_ACCESS_KEY_ID=SQS_ACCESS_KEY_ID
-MC_WEB_SQS_SECRET_ACCESS_KEY=SQS_SECRET_ACCESS_KEY
-TO_WEB_QUEUE_URL=TO_WEB_QUEUE_URL
-TO_MC_QUEUE_URL=TO_MC_QUEUE_URL
-TO_DISCORD_QUEUE_URL=TO_DISCORD_QUEUE_URL
+MC_WEB_SQS_ACCESS_KEY_ID=${MC_WEB_SQS_ACCESS_KEY_ID}
+MC_WEB_SQS_SECRET_ACCESS_KEY=${MC_WEB_SQS_SECRET_ACCESS_KEY}
+TO_WEB_QUEUE_URL=${TO_WEB_QUEUE_URL}
+TO_MC_QUEUE_URL=${TO_MC_QUEUE_URL}
+TO_DISCORD_QUEUE_URL=${TO_DISCORD_QUEUE_URL}
 
 # Redis Configuration (Docker network内)
 REDIS_URL=redis://redis-mc:6379
@@ -324,16 +324,17 @@ SQS_WORKER_ENABLED=true
 # Authentication API Configuration
 AUTH_API_ENABLED=true
 AUTH_API_PORT=8080
-AUTH_API_KEY=AUTH_API_KEY
+AUTH_API_KEY=$(openssl rand -hex 32)
 
 # Discord Bot Configuration
-DISCORD_TOKEN=DISCORD_BOT_TOKEN
-DISCORD_CHANNEL_ID=DISCORD_CHANNEL_ID
-DISCORD_CHAT_CHANNEL_ID=DISCORD_CHAT_CHANNEL_ID
-DISCORD_ADMIN_CHANNEL_ID=DISCORD_ADMIN_CHANNEL_ID
-DISCORD_RULE_CHANNEL_ID=DISCORD_RULE_CHANNEL_ID
-DISCORD_RULE_MESSAGE_ID=DISCORD_RULE_MESSAGE_ID
-DISCORD_GUILD_ID=DISCORD_GUILD_ID
+# Discord Developer Portalから取得
+DISCORD_TOKEN=YOUR_DISCORD_BOT_TOKEN_HERE
+DISCORD_CHANNEL_ID=YOUR_CHANNEL_ID
+DISCORD_CHAT_CHANNEL_ID=YOUR_CHAT_CHANNEL_ID
+DISCORD_ADMIN_CHANNEL_ID=YOUR_ADMIN_CHANNEL_ID
+DISCORD_RULE_CHANNEL_ID=YOUR_RULE_CHANNEL_ID
+DISCORD_RULE_MESSAGE_ID=YOUR_RULE_MESSAGE_ID
+DISCORD_GUILD_ID=YOUR_GUILD_ID
 DISCORD_PRESENCE_ACTIVITY=Kishaxサーバー
 BE_DEFAULT_EMOJI_NAME=steve
 
@@ -352,68 +353,27 @@ SHUTDOWN_GRACE_PERIOD=10
 LOG_LEVEL=INFO
 EOF
 
-# 実際の値に置換（例）
-# RDS PostgreSQL Endpoint
-sed -i "s|RDS_POSTGRES_ENDPOINT|$RDS_POSTGRES_ENDPOINT|g" .env
+# .envファイルを編集して実際の値に置き換え
+# 1. YOUR_POSTGRES_PASSWORD_HERE を terraform.tfvars の postgres_password の値に置き換え
+# 2. YOUR_DISCORD_BOT_TOKEN_HERE を Discord Developer Portal から取得した値に置き換え
+# 3. YOUR_*_ID を Discord から取得した実際のIDに置き換え
 
-# RDS PostgreSQL Password（SSMから取得）
-RDS_POSTGRES_PASSWORD=$(aws ssm get-parameter \
-  --region ap-northeast-1 \
-  --name "/kishax/production/rds/postgres/password" \
-  --with-decryption \
-  --query "Parameter.Value" \
-  --output text)
-sed -i "s|RDS_POSTGRES_PASSWORD|$RDS_POSTGRES_PASSWORD|g" .env
-
-# SQS認証情報
-SQS_ACCESS_KEY_ID=$(aws ssm get-parameter \
-  --region ap-northeast-1 \
-  --name "/kishax/production/sqs/access-key-id" \
-  --with-decryption \
-  --query "Parameter.Value" \
-  --output text)
-SQS_SECRET_ACCESS_KEY=$(aws ssm get-parameter \
-  --region ap-northeast-1 \
-  --name "/kishax/production/sqs/secret-access-key" \
-  --with-decryption \
-  --query "Parameter.Value" \
-  --output text)
-sed -i "s|SQS_ACCESS_KEY_ID|$SQS_ACCESS_KEY_ID|g" .env
-sed -i "s|SQS_SECRET_ACCESS_KEY|$SQS_SECRET_ACCESS_KEY|g" .env
-
-# SQS Queue URLs（Terraformから）
-sed -i "s|TO_WEB_QUEUE_URL|$TO_WEB_QUEUE_URL|g" .env
-sed -i "s|TO_MC_QUEUE_URL|$TO_MC_QUEUE_URL|g" .env
-sed -i "s|TO_DISCORD_QUEUE_URL|$TO_DISCORD_QUEUE_URL|g" .env
-
-# Discord Bot Token
-DISCORD_BOT_TOKEN=$(aws ssm get-parameter \
-  --region ap-northeast-1 \
-  --name "/kishax/production/discord/bot-token" \
-  --with-decryption \
-  --query "Parameter.Value" \
-  --output text)
-sed -i "s|DISCORD_BOT_TOKEN|$DISCORD_BOT_TOKEN|g" .env
-
-# その他の固定値（Discord Channel IDsなど）
-# 実際の値に置き換えてください
-sed -i "s|DISCORD_CHANNEL_ID|YOUR_CHANNEL_ID|g" .env
-sed -i "s|DISCORD_CHAT_CHANNEL_ID|YOUR_CHAT_CHANNEL_ID|g" .env
-sed -i "s|DISCORD_ADMIN_CHANNEL_ID|YOUR_ADMIN_CHANNEL_ID|g" .env
-sed -i "s|DISCORD_RULE_CHANNEL_ID|YOUR_RULE_CHANNEL_ID|g" .env
-sed -i "s|DISCORD_RULE_MESSAGE_ID|YOUR_RULE_MESSAGE_ID|g" .env
-sed -i "s|DISCORD_GUILD_ID|YOUR_GUILD_ID|g" .env
-
-# AUTH_API_KEY生成（新規の場合）
-AUTH_API_KEY=$(openssl rand -hex 32)
-sed -i "s|AUTH_API_KEY|$AUTH_API_KEY|g" .env
+# 例: viエディタで編集
+vi .env
 
 # .envファイルのパーミッション設定
 chmod 600 .env
+chown ec2-user:ec2-user .env
 
 # 確認（機密情報が含まれるので注意）
 cat .env
 ```
+
+> **重要**: 
+> - `YOUR_POSTGRES_PASSWORD_HERE`: `terraform.tfvars` の `postgres_password` の値を使用
+> - `YOUR_DISCORD_BOT_TOKEN_HERE`: Discord Developer Portalから取得
+> - Discord各種ID: Discordサーバーから取得
+> - `AUTH_API_KEY`: 自動生成される（`openssl rand -hex 32`）
 
 ### 1-5. アプリケーションビルドとデプロイ
 
@@ -496,30 +456,50 @@ git clone https://github.com/Kishax/web.git .
 cd /opt/web
 
 # .envファイル生成
-cat > .env << 'EOF'
+cat > .env << EOF
 # ===================================
 # Web Server Configuration (i-c, EC2)
 # ===================================
 
 # Database Configuration (RDS PostgreSQL)
-DATABASE_URL=postgresql://postgres:RDS_POSTGRES_PASSWORD@RDS_POSTGRES_ENDPOINT:5432/kishax
+# terraform.tfvarsのpostgres_passwordを使用
+DATABASE_URL=postgresql://postgres:YOUR_POSTGRES_PASSWORD_HERE@${RDS_POSTGRES_ENDPOINT}:5432/kishax
 
 # AWS SQS Configuration
 AWS_REGION=ap-northeast-1
-MC_WEB_SQS_ACCESS_KEY_ID=SQS_ACCESS_KEY_ID
-MC_WEB_SQS_SECRET_ACCESS_KEY=SQS_SECRET_ACCESS_KEY
-TO_WEB_QUEUE_URL=TO_WEB_QUEUE_URL
-TO_MC_QUEUE_URL=TO_MC_QUEUE_URL
-TO_DISCORD_QUEUE_URL=TO_DISCORD_QUEUE_URL
+MC_WEB_SQS_ACCESS_KEY_ID=${MC_WEB_SQS_ACCESS_KEY_ID}
+MC_WEB_SQS_SECRET_ACCESS_KEY=${MC_WEB_SQS_SECRET_ACCESS_KEY}
+TO_WEB_QUEUE_URL=${TO_WEB_QUEUE_URL}
+TO_MC_QUEUE_URL=${TO_MC_QUEUE_URL}
+TO_DISCORD_QUEUE_URL=${TO_DISCORD_QUEUE_URL}
 
 # Redis Configuration (i-b上のRedis #2)
-REDIS_URL=redis://API_SERVER_PRIVATE_IP:6380
+REDIS_URL=redis://${API_SERVER_PRIVATE_IP}:6380
 REDIS_CONNECTION_TIMEOUT=5000
 REDIS_COMMAND_TIMEOUT=3000
 
 # Queue Mode
 QUEUE_MODE=WEB
 SQS_WORKER_ENABLED=false
+
+# NextAuth Configuration
+NEXTAUTH_URL=https://kishax.net
+NEXTAUTH_SECRET=$(openssl rand -base64 32)
+
+# OAuth Providers (各プロバイダーのDeveloper Consoleから取得)
+GOOGLE_CLIENT_ID=YOUR_GOOGLE_CLIENT_ID
+GOOGLE_CLIENT_SECRET=YOUR_GOOGLE_CLIENT_SECRET
+DISCORD_CLIENT_ID=YOUR_DISCORD_CLIENT_ID
+DISCORD_CLIENT_SECRET=YOUR_DISCORD_CLIENT_SECRET
+TWITTER_CLIENT_ID=YOUR_TWITTER_CLIENT_ID
+TWITTER_CLIENT_SECRET=YOUR_TWITTER_CLIENT_SECRET
+
+# Email Configuration (SMTP)
+EMAIL_HOST=YOUR_SMTP_HOST
+EMAIL_PORT=587
+EMAIL_USER=YOUR_SMTP_USER
+EMAIL_PASS=YOUR_SMTP_PASSWORD
+EMAIL_FROM=noreply@kishax.net
 
 # Application Configuration
 NODE_ENV=production
@@ -529,18 +509,29 @@ PORT=80
 LOG_LEVEL=info
 EOF
 
-# 実際の値に置換
-sed -i "s|RDS_POSTGRES_ENDPOINT|$RDS_POSTGRES_ENDPOINT|g" .env
-sed -i "s|RDS_POSTGRES_PASSWORD|$RDS_POSTGRES_PASSWORD|g" .env
-sed -i "s|SQS_ACCESS_KEY_ID|$SQS_ACCESS_KEY_ID|g" .env
-sed -i "s|SQS_SECRET_ACCESS_KEY|$SQS_SECRET_ACCESS_KEY|g" .env
-sed -i "s|TO_WEB_QUEUE_URL|$TO_WEB_QUEUE_URL|g" .env
-sed -i "s|TO_MC_QUEUE_URL|$TO_MC_QUEUE_URL|g" .env
-sed -i "s|TO_DISCORD_QUEUE_URL|$TO_DISCORD_QUEUE_URL|g" .env
-sed -i "s|API_SERVER_PRIVATE_IP|$API_SERVER_PRIVATE_IP|g" .env
+# .envファイルを編集して実際の値に置き換え
+# 1. YOUR_POSTGRES_PASSWORD_HERE を terraform.tfvars の postgres_password の値に置き換え
+# 2. YOUR_GOOGLE_* を Google Cloud Console から取得した値に置き換え
+# 3. YOUR_DISCORD_* を Discord Developer Portal から取得した値に置き換え
+# 4. YOUR_TWITTER_* を Twitter Developer Portal から取得した値に置き換え
+# 5. YOUR_SMTP_* をメールプロバイダーから取得した値に置き換え
 
+# 例: viエディタで編集
+vi .env
+
+# .envファイルのパーミッション設定
 chmod 600 .env
+chown ec2-user:ec2-user .env
+
+# 確認（機密情報が含まれるので注意）
+cat .env
 ```
+
+> **重要**: 
+> - `YOUR_POSTGRES_PASSWORD_HERE`: `terraform.tfvars` の `postgres_password` の値を使用
+> - `NEXTAUTH_SECRET`: 自動生成される（`openssl rand -base64 32`）
+> - OAuth Client ID/Secret: 各プロバイダーのDeveloper Consoleから取得
+> - SMTP設定: 使用するメールプロバイダーの設定を使用
 
 ### 2-5. アプリケーションビルドとデプロイ
 
@@ -620,28 +611,29 @@ git clone https://github.com/Kishax/minecraft-server.git .
 cd /opt/minecraft
 
 # .envファイル生成
-cat > .env << 'EOF'
+cat > .env << EOF
 # ===================================
 # Minecraft Server Configuration (i-a, EC2)
 # ===================================
 
 # Database Configuration (RDS MySQL)
-DB_HOST=RDS_MYSQL_ENDPOINT
+# terraform.tfvarsのmysql_passwordを使用
+DB_HOST=${RDS_MYSQL_ENDPOINT}
 DB_PORT=3306
 DB_NAME=minecraft
 DB_USER=admin
-DB_PASSWORD=RDS_MYSQL_PASSWORD
+DB_PASSWORD=YOUR_MYSQL_PASSWORD_HERE
 
 # AWS SQS Configuration
 AWS_REGION=ap-northeast-1
-MC_WEB_SQS_ACCESS_KEY_ID=SQS_ACCESS_KEY_ID
-MC_WEB_SQS_SECRET_ACCESS_KEY=SQS_SECRET_ACCESS_KEY
-TO_WEB_QUEUE_URL=TO_WEB_QUEUE_URL
-TO_MC_QUEUE_URL=TO_MC_QUEUE_URL
-TO_DISCORD_QUEUE_URL=TO_DISCORD_QUEUE_URL
+MC_WEB_SQS_ACCESS_KEY_ID=${MC_WEB_SQS_ACCESS_KEY_ID}
+MC_WEB_SQS_SECRET_ACCESS_KEY=${MC_WEB_SQS_SECRET_ACCESS_KEY}
+TO_WEB_QUEUE_URL=${TO_WEB_QUEUE_URL}
+TO_MC_QUEUE_URL=${TO_MC_QUEUE_URL}
+TO_DISCORD_QUEUE_URL=${TO_DISCORD_QUEUE_URL}
 
 # Redis Configuration (i-b上のRedis #1)
-REDIS_HOST=API_SERVER_PRIVATE_IP
+REDIS_HOST=${API_SERVER_PRIVATE_IP}
 REDIS_PORT=6379
 REDIS_CONNECTION_TIMEOUT=5000
 
@@ -655,35 +647,32 @@ MC_VIEW_DISTANCE=10
 MC_SIMULATION_DISTANCE=10
 
 # Authentication API Configuration
-AUTH_API_URL=http://API_SERVER_PRIVATE_IP:8080
-AUTH_API_KEY=AUTH_API_KEY
+# AUTH_API_KEYはi-bで生成した値と同じものを使用
+AUTH_API_URL=http://${API_SERVER_PRIVATE_IP}:8080
+AUTH_API_KEY=COPY_FROM_I_B_AUTH_API_KEY
 
 # Logging Configuration
 LOG_LEVEL=INFO
 EOF
 
-# 実際の値に置換
-sed -i "s|RDS_MYSQL_ENDPOINT|$RDS_MYSQL_ENDPOINT|g" .env
+# .envファイルを編集して実際の値に置き換え
+# 1. YOUR_MYSQL_PASSWORD_HERE を terraform.tfvars の mysql_password の値に置き換え
+# 2. COPY_FROM_I_B_AUTH_API_KEY を i-b の .env の AUTH_API_KEY の値に置き換え
 
-# RDS MySQLパスワード取得
-RDS_MYSQL_PASSWORD=$(aws ssm get-parameter \
-  --region ap-northeast-1 \
-  --name "/kishax/production/rds/mysql/password" \
-  --with-decryption \
-  --query "Parameter.Value" \
-  --output text)
-sed -i "s|RDS_MYSQL_PASSWORD|$RDS_MYSQL_PASSWORD|g" .env
+# 例: viエディタで編集
+vi .env
 
-sed -i "s|SQS_ACCESS_KEY_ID|$SQS_ACCESS_KEY_ID|g" .env
-sed -i "s|SQS_SECRET_ACCESS_KEY|$SQS_SECRET_ACCESS_KEY|g" .env
-sed -i "s|TO_WEB_QUEUE_URL|$TO_WEB_QUEUE_URL|g" .env
-sed -i "s|TO_MC_QUEUE_URL|$TO_MC_QUEUE_URL|g" .env
-sed -i "s|TO_DISCORD_QUEUE_URL|$TO_DISCORD_QUEUE_URL|g" .env
-sed -i "s|API_SERVER_PRIVATE_IP|$API_SERVER_PRIVATE_IP|g" .env
-sed -i "s|AUTH_API_KEY|$AUTH_API_KEY|g" .env
-
+# .envファイルのパーミッション設定
 chmod 600 .env
+chown ec2-user:ec2-user .env
+
+# 確認（機密情報が含まれるので注意）
+cat .env
 ```
+
+> **重要**: 
+> - `YOUR_MYSQL_PASSWORD_HERE`: `terraform.tfvars` の `mysql_password` の値を使用
+> - `COPY_FROM_I_B_AUTH_API_KEY`: i-b の `/opt/api/.env` の `AUTH_API_KEY` の値をコピー
 
 ### 3-5. Route53 DNS更新スクリプト確認
 

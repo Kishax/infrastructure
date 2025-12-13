@@ -1,12 +1,8 @@
-tfplan
-.bak/*
-ssm-parameters.json
-node_modules/
-
 ### プロジェクト固有 ###
 .env
 .env.backup
 .env.backup.new
+.bak/*
 jdt.ls-java-project/
 *~
 experience/
@@ -55,10 +51,6 @@ $RECYCLE.BIN/
 # デプロイ用スクリプト（機密情報含む可能性）
 deploy.sh
 deploy-*.sh
-
-# 動的生成される本番用AWS設定ファイル
-cloudformation-template.prod.yaml
-cloudformation-parameters.prod.json
 
 ### Terraform ###
 terraform/.terraform/

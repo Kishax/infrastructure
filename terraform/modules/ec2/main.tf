@@ -85,14 +85,15 @@ resource "aws_eip_association" "mc_server" {
 # - Spot instance for cost optimization
 # - t3.small
 # - 24/7 operation
+# - Public subnet for internet access (Docker Hub, Discord API)
 resource "aws_spot_instance_request" "api_server" {
   ami           = data.aws_ami.amazon_linux_2.id
   instance_type = "t3.small"
   spot_type     = "persistent"  # 中断時に再起動
   
-  subnet_id                   = var.private_subnet_ids[0]
+  subnet_id                   = var.public_subnet_ids[0]
   vpc_security_group_ids      = [var.api_server_sg_id]
-  associate_public_ip_address = false  # Private subnet
+  associate_public_ip_address = true  # Public subnet for internet access
   
   iam_instance_profile = var.api_server_instance_profile
   key_name            = var.ec2_key_pair_name

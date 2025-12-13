@@ -135,6 +135,34 @@ terraform apply
 terraform output jump_server_instance_id
 ```
 
+#### ⚠️ API Server (i-b) のSubnet変更
+
+**重要**: API ServerもPrivate SubnetからPublic Subnetに移動されました。
+
+**理由（コスト最適化）**: 
+- Discord BotがDiscord APIにアクセスする必要がある（インターネット必須）
+- Docker HubからImageをpullする必要がある
+- Private Subnet運用にはNAT Gateway（月額$32）が必要
+- 現在の予算目標（¥5,000-6,000）を維持するため
+
+**セキュリティ対策**:
+- Security Groupで適切に保護
+  - Port 8080: MC/Webからのみ
+  - Port 6379/6380: MC/Webからのみ（Redis）
+  - Port 22: Jump Serverからのみ
+- 外部からの直接アクセスは不可
+
+**将来の改善案**:
+- Discord Botを独立インスタンス（i-e）に分離
+- i-bをPrivate Subnetに戻す
+- 詳細は`docs/infrastructure/ec2/next-challenge.md`を参照
+
+```bash
+# terraform apply実行時、API Serverが再作成される
+cd /Users/tk/git/Kishax/infrastructure/terraform
+terraform apply
+```
+
 ---
 
 ### 1. Terraform出力情報を取得

@@ -59,117 +59,57 @@
 
 ## 📦 i-b (API Server) のRedis構成
 
-### Redis #1: MC Server用（ポート 6379）
+i-bでは**2つのRedisをDockerコンテナ**として、`compose-ec2.yaml`に含めて起動します。
 
-**用途**: MC Serverからのリアルタイム通信  
-**接続元**: i-a (MC Server)  
-**設定ファイル**: `/etc/redis/redis-mc.conf`
+### Redis構成
 
-```conf
-# /etc/redis/redis-mc.conf
-port 6379
-bind 0.0.0.0
-protected-mode no
-daemonize yes
-pidfile /var/run/redis/redis-mc.pid
-logfile /var/log/redis/redis-mc.log
-dir /var/lib/redis/mc
-dbfilename dump-mc.rdb
-appendonly yes
-appendfilename "appendonly-mc.aof"
-maxmemory 512mb
-maxmemory-policy allkeys-lru
-```
+| Redis | ポート | 用途 | 接続元 | メモリ |
+|-------|--------|------|--------|--------|
+| **Redis #1 (redis-mc)** | 6379 | MC Server用 | i-a (MC Server)<br/>i-b (SQS Bridge) | 512MB |
+| **Redis #2 (redis-web)** | 6380 | Web + Discord用 | i-b (Discord Bot)<br/>i-c (Web Server) | 256MB |
 
-**systemdサービス**: `/etc/systemd/system/redis-mc.service`
+### compose-ec2.yamlに含まれる
 
-```ini
-[Unit]
-Description=Redis Server for MC (Port 6379)
-After=network.target
+`apps/api/compose-ec2.yaml`には以下のサービスが含まれます：
 
-[Service]
-Type=forking
-User=redis
-Group=redis
-ExecStart=/usr/bin/redis-server /etc/redis/redis-mc.conf
-ExecStop=/usr/bin/redis-cli -p 6379 shutdown
-Restart=always
-RestartSec=10
+1. **redis-mc**: MC Server用Redis (port 6379)
+2. **redis-web**: Web + Discord用Redis (port 6380)
+3. **sqs-redis-bridge**: SQS Redis Bridge
+4. **mc-auth**: MC Auth API (port 8080)
+5. **discord-bot**: Discord Bot
 
-[Install]
-WantedBy=multi-user.target
-```
-
-### Redis #2: Web + Discord用（ポート 6380）
-
-**用途**: Web/Discord BotからのRedis Pub/Sub、セッション管理  
-**接続元**: i-b (Discord Bot - localhost), i-c (Web Server - remote)  
-**設定ファイル**: `/etc/redis/redis-web.conf`
-
-```conf
-# /etc/redis/redis-web.conf
-port 6380
-bind 0.0.0.0
-protected-mode no
-daemonize yes
-pidfile /var/run/redis/redis-web.pid
-logfile /var/log/redis/redis-web.log
-dir /var/lib/redis/web
-dbfilename dump-web.rdb
-appendonly yes
-appendfilename "appendonly-web.aof"
-maxmemory 256mb
-maxmemory-policy allkeys-lru
-```
-
-**systemdサービス**: `/etc/systemd/system/redis-web.service`
-
-```ini
-[Unit]
-Description=Redis Server for Web (Port 6380)
-After=network.target
-
-[Service]
-Type=forking
-User=redis
-Group=redis
-ExecStart=/usr/bin/redis-server /etc/redis/redis-web.conf
-ExecStop=/usr/bin/redis-cli -p 6380 shutdown
-Restart=always
-RestartSec=10
-
-[Install]
-WantedBy=multi-user.target
-```
+Redis接続：
+- **sqs-redis-bridge** → `redis://redis-mc:6379`
+- **discord-bot** → `redis://redis-web:6380`
+- **i-a (MC Server)** → `redis://10.0.36.61:6379` (外部接続)
+- **i-c (Web Server)** → `redis://10.0.36.61:6380` (外部接続)
 
 ### Redis起動手順（i-b）
 
 ```bash
-# Redisユーザー作成
-sudo useradd -r -s /bin/false redis
+# SSM Session Manager経由でi-bに接続
+aws ssm start-session --target i-0705b4674660068d2 --profile AdministratorAccess-126112056177
 
-# ディレクトリ作成
-sudo mkdir -p /etc/redis /var/lib/redis/{mc,web} /var/run/redis /var/log/redis
-sudo chown -R redis:redis /var/lib/redis /var/run/redis /var/log/redis
+# apiユーザーに切り替え
+sudo su - api
+cd /opt/api
 
-# 設定ファイル配置（上記内容を記述）
-sudo vi /etc/redis/redis-mc.conf
-sudo vi /etc/redis/redis-web.conf
+# compose-ec2.yamlを配置（apps/api/compose-ec2.yamlから）
+# Redisを含む全サービスが起動します
 
-# systemdサービス配置
-sudo vi /etc/systemd/system/redis-mc.service
-sudo vi /etc/systemd/system/redis-web.service
+# 起動
+docker-compose -f compose-ec2.yaml up -d
 
-# サービス有効化と起動
-sudo systemctl daemon-reload
-sudo systemctl enable redis-mc redis-web
-sudo systemctl start redis-mc redis-web
+# Redis起動確認
+docker-compose -f compose-ec2.yaml ps
 
-# 状態確認
-sudo systemctl status redis-mc redis-web
-redis-cli -p 6379 ping  # PONG
-redis-cli -p 6380 ping  # PONG
+# Redis接続確認
+docker exec kishax-redis-mc redis-cli -p 6379 ping  # PONG
+docker exec kishax-redis-web redis-cli -p 6380 ping  # PONG
+
+# ホストからの接続確認（i-a, i-c用）
+redis-cli -h 127.0.0.1 -p 6379 ping  # PONG
+redis-cli -h 127.0.0.1 -p 6380 ping  # PONG
 ```
 
 ---
@@ -591,30 +531,32 @@ chmod 600 .env
 #### 3. デプロイ
 
 ```bash
-# compose.yamlをコピー
-cp /path/to/apps/api/compose-ec2.yaml docker-compose.yml
+# compose-ec2.yamlをコピー
+cp /path/to/apps/api/compose-ec2.yaml compose-ec2.yaml
 
 # オプション1: ソースコードからビルド（初回）
-docker-compose build
+docker-compose -f compose-ec2.yaml build
 
 # オプション2: 事前ビルド済みJARを使用
 # （ローカルでビルドしたJARをEC2にコピー済みの場合）
 # Dockerfileでビルドスキップ条件が満たされる
 
-# 起動
-docker-compose up -d
+# 起動（Redis + API + Discord Bot 全て起動）
+docker-compose -f compose-ec2.yaml up -d
 
 # ログ確認
-docker-compose logs -f
+docker-compose -f compose-ec2.yaml logs -f
 
 # 各サービスの状態確認
-docker-compose ps
-# mc-auth, sqs-redis-bridge, discord-bot が全てUpであることを確認
+docker-compose -f compose-ec2.yaml ps
+# redis-mc, redis-web, mc-auth, sqs-redis-bridge, discord-bot が全てUpであることを確認
 
 # 個別サービスのログ確認
-docker-compose logs -f mc-auth
-docker-compose logs -f sqs-redis-bridge
-docker-compose logs -f discord-bot
+docker-compose -f compose-ec2.yaml logs -f redis-mc
+docker-compose -f compose-ec2.yaml logs -f redis-web
+docker-compose -f compose-ec2.yaml logs -f mc-auth
+docker-compose -f compose-ec2.yaml logs -f sqs-redis-bridge
+docker-compose -f compose-ec2.yaml logs -f discord-bot
 ```
 
 ---
@@ -780,8 +722,9 @@ echo "DISCORD_TOKEN=$(get_param /kishax/production/discord/bot-token)"
 - [ ] 画像保存ディレクトリ権限確認（/mc/server/images）
 
 ### i-b (API Server + Discord Bot)
-- [ ] Redis #1 (port 6379) 起動確認
-- [ ] Redis #2 (port 6380) 起動確認
+- [ ] Redis #1 (Docker, port 6379) 起動確認
+- [ ] Redis #2 (Docker, port 6380) 起動確認
+- [ ] Redis接続確認（i-a, i-cから）
 - [ ] RDS PostgreSQL接続確認
 - [ ] MC Auth API起動確認（port 8080）
 - [ ] SQS Redis Bridge起動確認
@@ -804,14 +747,15 @@ echo "DISCORD_TOKEN=$(get_param /kishax/production/discord/bot-token)"
 **症状**: `ECONNREFUSED` or `Connection timeout`
 
 **確認事項**:
-1. i-bのRedisが起動しているか
+1. i-bのRedisコンテナが起動しているか
    ```bash
-   sudo systemctl status redis-mc redis-web
+   docker ps | grep redis
+   docker-compose -f docker-compose.redis.yaml ps
    ```
-2. Redisがbind 0.0.0.0で待機しているか
+2. Redisがポート6379, 6380で待機しているか
    ```bash
-   redis-cli -p 6379 CONFIG GET bind
-   redis-cli -p 6380 CONFIG GET bind
+   docker exec kishax-redis-mc redis-cli -p 6379 ping
+   docker exec kishax-redis-web redis-cli -p 6380 ping
    ```
 3. Security Groupでポート6379, 6380が許可されているか
 4. 接続元EC2からtelnetテスト

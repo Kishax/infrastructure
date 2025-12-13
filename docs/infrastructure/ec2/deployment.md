@@ -108,6 +108,25 @@ aws ec2 describe-instances \
   --query 'Reservations[*].Instances[*].{ID:InstanceId,State:State.Name,SpotRequest:SpotInstanceRequestId,Subnet:SubnetId}' \
   --output table
 
+# 1-1. 古いインスタンスを判別（複数ある場合）
+# より詳細な情報で判断
+aws ec2 describe-instances \
+  --profile AdministratorAccess-126112056177 \
+  --filters "Name=instance-state-name,Values=running,shutting-down" "Name=instance-type,Values=t3.small" \
+  --query 'Reservations[*].Instances[*].{InstanceId:InstanceId,LaunchTime:LaunchTime,State:State.Name,SubnetId:SubnetId,SpotRequestId:SpotInstanceRequestId}' \
+  --output table
+
+# 判別方法:
+# - LaunchTime（起動時刻）: 古い方が早い時刻
+# - SubnetId: 古い方はPrivate Subnet（移行前）、新しい方はPublic Subnet（移行後）
+#
+# Subnet情報を確認（PublicかPrivateか）:
+aws ec2 describe-subnets \
+  --profile AdministratorAccess-126112056177 \
+  --query 'Subnets[*].{SubnetId:SubnetId,CIDR:CidrBlock,AZ:AvailabilityZone,Name:Tags[?Key==`Name`].Value|[0]}' \
+  --output table
+# → Nameに「public」または「private」が含まれているかで判断
+
 # 2. 古いインスタンス（古いSubnetにあるもの）を強制終了
 aws ec2 terminate-instances \
   --instance-ids i-0c179bef38c95181c \

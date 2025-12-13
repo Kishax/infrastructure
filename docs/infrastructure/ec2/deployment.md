@@ -367,16 +367,16 @@ cat .env
 cd /opt/api
 
 # Docker Composeでビルド
-docker compose -f compose-ec2.yaml build
+docker compose -f compose.yaml build
 
 # サービス起動
-docker compose -f compose-ec2.yaml up -d
+docker compose -f compose.yaml up -d
 
 # 起動確認
-docker compose -f compose-ec2.yaml ps
+docker compose -f compose.yaml ps
 
 # ログ確認
-docker compose -f compose-ec2.yaml logs -f
+docker compose -f compose.yaml logs -f
 ```
 
 ### 1-6. 動作確認
@@ -395,7 +395,7 @@ docker logs kishax-mc-auth
 docker logs kishax-discord-bot
 
 # 全サービスのステータス確認
-docker compose -f compose-ec2.yaml ps
+docker compose -f compose.yaml ps
 ```
 
 ---
@@ -494,14 +494,14 @@ chmod 600 .env
 cd /opt/web
 
 # Docker Composeでビルド
-docker compose -f compose-ec2.yaml build
+docker compose -f compose.yaml build
 
 # サービス起動
-docker compose -f compose-ec2.yaml up -d
+docker compose -f compose.yaml up -d
 
 # 起動確認
-docker compose -f compose-ec2.yaml ps
-docker compose -f compose-ec2.yaml logs -f
+docker compose -f compose.yaml ps
+docker compose -f compose.yaml logs -f
 ```
 
 ### 2-6. 動作確認
@@ -648,14 +648,14 @@ sudo /usr/local/bin/update-route53.sh
 cd /opt/minecraft
 
 # Docker Composeでビルド
-docker compose -f compose-ec2.yml build
+docker compose -f compose.yml build
 
 # サービス起動
-docker compose -f compose-ec2.yml up -d
+docker compose -f compose.yml up -d
 
 # 起動確認
-docker compose -f compose-ec2.yml ps
-docker compose -f compose-ec2.yml logs -f
+docker compose -f compose.yml ps
+docker compose -f compose.yml logs -f
 ```
 
 ### 3-7. 動作確認
@@ -732,14 +732,14 @@ aws ssm start-session --profile AdministratorAccess-126112056177 --target $INSTA
 
 # 全サービス再起動
 cd /opt/api
-docker compose -f compose-ec2.yaml restart
+docker compose -f compose.yaml restart
 
 # 個別サービス再起動
-docker compose -f compose-ec2.yaml restart sqs-redis-bridge
-docker compose -f compose-ec2.yaml restart mc-auth
-docker compose -f compose-ec2.yaml restart discord-bot
-docker compose -f compose-ec2.yaml restart redis-mc
-docker compose -f compose-ec2.yaml restart redis-web
+docker compose -f compose.yaml restart sqs-redis-bridge
+docker compose -f compose.yaml restart mc-auth
+docker compose -f compose.yaml restart discord-bot
+docker compose -f compose.yaml restart redis-mc
+docker compose -f compose.yaml restart redis-web
 ```
 
 #### i-c (Web Server)
@@ -750,7 +750,7 @@ aws ssm start-session --profile AdministratorAccess-126112056177 --target $INSTA
 
 # サービス再起動
 cd /opt/web
-docker compose -f compose-ec2.yaml restart
+docker compose -f compose.yaml restart
 ```
 
 #### i-a (MC Server)
@@ -761,14 +761,14 @@ aws ssm start-session --profile AdministratorAccess-126112056177 --target $INSTA
 
 # サービス再起動
 cd /opt/minecraft
-docker compose -f compose-ec2.yml restart
+docker compose -f compose.yml restart
 ```
 
 ### ログ確認
 
 ```bash
 # リアルタイムログ（i-b）
-docker compose -f compose-ec2.yaml logs -f
+docker compose -f compose.yaml logs -f
 
 # 特定サービスのログ
 docker logs kishax-redis-mc --tail 100 -f
@@ -777,20 +777,20 @@ docker logs kishax-mc-auth --tail 100 -f
 docker logs kishax-discord-bot --tail 100 -f
 
 # ログ保存
-docker compose -f compose-ec2.yaml logs > /tmp/api-server-logs.txt
+docker compose -f compose.yaml logs > /tmp/api-server-logs.txt
 ```
 
 ### サービス停止・起動
 
 ```bash
 # 停止
-docker compose -f compose-ec2.yaml down
+docker compose -f compose.yaml down
 
 # 起動（既存イメージ使用）
-docker compose -f compose-ec2.yaml up -d
+docker compose -f compose.yaml up -d
 
 # 再ビルドして起動
-docker compose -f compose-ec2.yaml up -d --build
+docker compose -f compose.yaml up -d --build
 ```
 
 ### EC2インスタンスの起動・停止
@@ -832,7 +832,7 @@ df -h
 sudo journalctl -u docker -n 50
 
 # コンテナログ確認
-docker compose -f compose-ec2.yaml logs
+docker compose -f compose.yaml logs
 ```
 
 **解決策**:
@@ -869,7 +869,7 @@ aws ec2 describe-security-groups \
 **解決策**:
 ```bash
 # Redisコンテナ再起動
-docker compose -f compose-ec2.yaml restart redis-mc redis-web
+docker compose -f compose.yaml restart redis-mc redis-web
 
 # セキュリティグループのインバウンドルール確認
 # Terraform設定を見直し、必要に応じて修正
@@ -934,7 +934,7 @@ aws ssm get-parameter \
   --with-decryption
 
 # .envファイルを修正して再起動
-docker compose -f compose-ec2.yaml restart sqs-redis-bridge
+docker compose -f compose.yaml restart sqs-redis-bridge
 ```
 
 ### 問題5: Route53のDNS更新が失敗
@@ -994,7 +994,7 @@ aws ec2 describe-security-groups \
 **解決策**:
 ```bash
 # i-cのWebサーバーが起動しているか確認
-docker compose -f compose-ec2.yaml ps
+docker compose -f compose.yaml ps
 
 # セキュリティグループでHTTP (80)を許可
 # Terraform設定を修正して再apply
@@ -1036,10 +1036,10 @@ docker exec kishax-discord-bot redis-cli -h redis-web -p 6380 ping
 cat /opt/api/.env | grep DISCORD_TOKEN
 
 # Discord Botコンテナ再起動
-docker compose -f compose-ec2.yaml restart discord-bot
+docker compose -f compose.yaml restart discord-bot
 
 # ログを見ながら起動
-docker compose -f compose-ec2.yaml up discord-bot
+docker compose -f compose.yaml up discord-bot
 ```
 
 ---

@@ -19,7 +19,7 @@
 | インスタンス | アプリケーション | Docker Compose | ポート | データベース | Redis |
 |------------|----------------|---------------|--------|------------|-------|
 | **i-a (MC Server)** | Minecraft Server (Java) | `apps/mc/compose.yml` | 25565, 25577 | RDS MySQL | ローカル（コンテナ内） |
-| **i-b (API Server)** | Backend API + SQS Bridge + Discord Bot | `apps/api/compose-ec2.yaml` | 8080 | RDS PostgreSQL | **ホスト側（2つ）** |
+| **i-b (API Server)** | Backend API + SQS Bridge + Discord Bot | `apps/api/compose.yaml` | 8080 | RDS PostgreSQL | **ホスト側（2つ）** |
 | **i-c (Web Server)** | Next.js Web | `apps/web/compose.yaml` | 3000 | RDS PostgreSQL | i-b のホストRedis |
 | **i-d (Jump Server)** | なし（踏み台のみ） | - | - | - | - |
 
@@ -59,7 +59,7 @@
 
 ## 📦 i-b (API Server) のRedis構成
 
-i-bでは**2つのRedisをDockerコンテナ**として、`compose-ec2.yaml`に含めて起動します。
+i-bでは**2つのRedisをDockerコンテナ**として、`compose.yaml`に含めて起動します。
 
 ### Redis構成
 
@@ -68,9 +68,9 @@ i-bでは**2つのRedisをDockerコンテナ**として、`compose-ec2.yaml`に�
 | **Redis #1 (redis-mc)** | 6379 | MC Server用 | i-a (MC Server)<br/>i-b (SQS Bridge) | 512MB |
 | **Redis #2 (redis-web)** | 6380 | Web + Discord用 | i-b (Discord Bot)<br/>i-c (Web Server) | 256MB |
 
-### compose-ec2.yamlに含まれる
+### compose.yamlに含まれる
 
-`apps/api/compose-ec2.yaml`には以下のサービスが含まれます：
+`apps/api/compose.yaml`には以下のサービスが含まれます：
 
 1. **redis-mc**: MC Server用Redis (port 6379)
 2. **redis-web**: Web + Discord用Redis (port 6380)
@@ -94,14 +94,14 @@ aws ssm start-session --target i-0705b4674660068d2 --profile AdministratorAccess
 sudo su - api
 cd /opt/api
 
-# compose-ec2.yamlを配置（apps/api/compose-ec2.yamlから）
+# compose.yamlを配置（apps/api/compose.yamlから）
 # Redisを含む全サービスが起動します
 
 # 起動
-docker-compose -f compose-ec2.yaml up -d
+docker-compose -f compose.yaml up -d
 
 # Redis起動確認
-docker-compose -f compose-ec2.yaml ps
+docker-compose -f compose.yaml ps
 
 # Redis接続確認
 docker exec kishax-redis-mc redis-cli -p 6379 ping  # PONG
@@ -130,7 +130,7 @@ redis-cli -h 127.0.0.1 -p 6380 ping  # PONG
 - `volumes`の`mysql_data`, `redis_data`
 - `depends_on`の`mysql`, `redis`
 
-**修正後のcompose.yml** (`apps/mc/compose-ec2.yml`):
+**修正後のcompose.yml** (`apps/mc/compose.yml`):
 
 ```yaml
 services:
@@ -254,7 +254,7 @@ chmod 600 .env
 
 ```bash
 # compose.ymlをコピー
-cp /path/to/apps/mc/compose-ec2.yml docker-compose.yml
+cp /path/to/apps/mc/compose.yml docker-compose.yml
 
 # 起動
 docker-compose up -d
@@ -304,7 +304,7 @@ ls -lh mc-auth/target/*.jar
 
 #### 1. compose.yamlの修正
 
-**修正後のcompose.yaml** (`apps/api/compose-ec2.yaml`):
+**修正後のcompose.yaml** (`apps/api/compose.yaml`):
 
 > **重要**: 元のDockerfileは`supervisord`で2サービスを1コンテナで起動する設計です。  
 > compose.yamlで分離する場合、以下2つの対応が必要です：
@@ -531,32 +531,32 @@ chmod 600 .env
 #### 3. デプロイ
 
 ```bash
-# compose-ec2.yamlをコピー
-cp /path/to/apps/api/compose-ec2.yaml compose-ec2.yaml
+# compose.yamlをコピー
+cp /path/to/apps/api/compose.yaml compose.yaml
 
 # オプション1: ソースコードからビルド（初回）
-docker-compose -f compose-ec2.yaml build
+docker-compose -f compose.yaml build
 
 # オプション2: 事前ビルド済みJARを使用
 # （ローカルでビルドしたJARをEC2にコピー済みの場合）
 # Dockerfileでビルドスキップ条件が満たされる
 
 # 起動（Redis + API + Discord Bot 全て起動）
-docker-compose -f compose-ec2.yaml up -d
+docker-compose -f compose.yaml up -d
 
 # ログ確認
-docker-compose -f compose-ec2.yaml logs -f
+docker-compose -f compose.yaml logs -f
 
 # 各サービスの状態確認
-docker-compose -f compose-ec2.yaml ps
+docker-compose -f compose.yaml ps
 # redis-mc, redis-web, mc-auth, sqs-redis-bridge, discord-bot が全てUpであることを確認
 
 # 個別サービスのログ確認
-docker-compose -f compose-ec2.yaml logs -f redis-mc
-docker-compose -f compose-ec2.yaml logs -f redis-web
-docker-compose -f compose-ec2.yaml logs -f mc-auth
-docker-compose -f compose-ec2.yaml logs -f sqs-redis-bridge
-docker-compose -f compose-ec2.yaml logs -f discord-bot
+docker-compose -f compose.yaml logs -f redis-mc
+docker-compose -f compose.yaml logs -f redis-web
+docker-compose -f compose.yaml logs -f mc-auth
+docker-compose -f compose.yaml logs -f sqs-redis-bridge
+docker-compose -f compose.yaml logs -f discord-bot
 ```
 
 ---
@@ -565,7 +565,7 @@ docker-compose -f compose-ec2.yaml logs -f discord-bot
 
 #### 1. Web compose.yamlの修正
 
-**修正後** (`apps/web/compose-ec2.yaml`):
+**修正後** (`apps/web/compose.yaml`):
 
 ```yaml
 services:
@@ -653,7 +653,7 @@ chmod 600 .env
 ```bash
 # Web起動
 cd /opt/web
-cp /path/to/apps/web/compose-ec2.yaml docker-compose.yml
+cp /path/to/apps/web/compose.yaml docker-compose.yml
 docker-compose up -d
 
 # ログ確認
@@ -795,7 +795,7 @@ echo "DISCORD_TOKEN=$(get_param /kishax/production/discord/bot-token)"
 
 ## 📅 次のステップ
 
-1. **compose-ec2.yamlファイル作成**: 各アプリケーションの本番用compose.yamlを作成
+1. **compose.yamlファイル作成**: 各アプリケーションの本番用compose.yamlを作成
 2. **i-bのRedis構築**: 2つのRedisインスタンスをセットアップ
 3. **SSM Parameter登録**: 全ての機密情報をSSMに登録
 4. **.envテンプレート作成**: 各EC2インスタンス用の.envテンプレート作成

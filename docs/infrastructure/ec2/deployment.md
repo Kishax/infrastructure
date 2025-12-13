@@ -827,7 +827,7 @@ docker exec -it kishax-redis-mc redis-cli ping
 docker exec -it kishax-redis-web redis-cli -p 6380 ping
 
 # MC Auth API確認
-curl http://localhost:8080/health
+curl http://localhost:8080/api/health
 
 # コンテナログ確認
 docker logs kishax-sqs-redis-bridge

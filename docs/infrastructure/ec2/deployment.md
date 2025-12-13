@@ -117,8 +117,13 @@ aws ec2 describe-instances \
   --output table
 
 # 判別方法:
-# - LaunchTime（起動時刻）: 古い方が早い時刻
-# - SubnetId: 古い方はPrivate Subnet（移行前）、新しい方はPublic Subnet（移行後）
+# - LaunchTime（起動時刻）: より過去の時刻 = 古いインスタンス、最近の時刻 = 新しいインスタンス
+#   例: 21:44:41 (古い) < 21:46:27 (新しい)
+#       ↑ 古い方を終了        ↑ これを残す
+#
+# - SubnetId: 同じSubnetなら両方とも新しいか古いかのどちらか
+#   今回のケースでは両方とも同じPublic Subnet (subnet-0669fb266ff0aab47)
+#   → LaunchTimeで判別する
 #
 # Subnet情報を確認（PublicかPrivateか）:
 aws ec2 describe-subnets \

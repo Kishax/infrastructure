@@ -643,6 +643,9 @@ ssh -i /Users/tk/git/Kishax/infrastructure/minecraft.pem -p 2222 ec2-user@localh
 ### 1-2. 必要なソフトウェアのインストール確認
 
 ```bash
+# Gitインストール確認
+git --version
+
 # Dockerインストール確認
 docker --version
 
@@ -659,10 +662,26 @@ sudo systemctl enable docker
 sudo usermod -aG docker ec2-user
 
 # Docker Compose v2インストール
+# 1. ディレクトリ構造を確認
+ls -la /usr/local/lib/docker/
+
+# 2. 必要なディレクトリを作成
 sudo mkdir -p /usr/local/lib/docker/cli-plugins
-sudo curl -SL https://github.com/docker/compose/releases/download/v2.24.0/docker-compose-linux-x86_64 \
-  -o /usr/local/lib/docker/cli-plugins/docker-compose
+
+# 3. 最新版をダウンロード（v2.32.1）
+sudo curl -L "https://github.com/docker/compose/releases/download/v2.32.1/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/lib/docker/cli-plugins/docker-compose
+
+# 4. 実行権限付与
 sudo chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
+
+# 5. バージョン確認
+docker compose version
+# → Docker Compose version v2.32.1 が表示されればOK
+
+# Note: buildx 0.17以降が必要なため、v2.32.1以上を推奨
+
+# Gitインストール
+sudo yum install -y git
 
 # セッション再接続（グループ反映のため）
 exit
@@ -682,10 +701,10 @@ sudo chown ec2-user:ec2-user /opt/api
 cd /opt/api
 
 # Gitリポジトリクローン
-git clone https://github.com/Kishax/api.git .
+git clone https://github.com/Kishax/kishax-api.git .
 
 # または、既存の認証情報を使用
-# git clone git@github.com:Kishax/api.git .
+# git clone git@github.com:Kishax/kishax-api.git .
 ```
 
 ### 1-4. 環境変数ファイル生成
@@ -776,6 +795,16 @@ cat .env
 > - `YOUR_DISCORD_BOT_TOKEN_HERE`: Discord Developer Portalから取得
 > - Discord各種ID: Discordサーバーから取得
 > - `AUTH_API_KEY`: 自動生成される（`openssl rand -hex 32`）
+>
+> **パスワードの特殊文字エスケープ**:
+> - パスワードに `$` が含まれる場合、Docker Composeが環境変数として解釈してしまいます
+> - 例: `password=Kx2025!PgSQL#Prod$Secure*Main` → `$Secure` が変数として解釈される
+> - **対処法**: `$` を `$$` にエスケープ
+>   ```
+>   正: password=Kx2025!PgSQL#Prod$$Secure*Main
+>   誤: password=Kx2025!PgSQL#Prod$Secure*Main
+>   ```
+> - または、URLエンコード: `$` → `%24`, `#` → `%23`, `*` → `%2A`
 
 ### 1-5. アプリケーションビルドとデプロイ
 

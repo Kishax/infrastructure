@@ -78,7 +78,7 @@ terraform output
 
 ### 0. Terraform適用時の注意事項
 
-⚠️ **Spotインスタンス再作成時のエラー対処**
+#### ⚠️ Spotインスタンス再作成時のエラー対処
 
 `terraform apply`でSpotインスタンス（i-b, i-c）を再作成する場合、以下のエラーが発生することがあります：
 
@@ -109,6 +109,30 @@ aws ec2 describe-instances \
 # 4. terminated になったら terraform apply を再実行
 cd /Users/tk/git/Kishax/infrastructure/terraform
 terraform apply
+```
+
+#### ⚠️ Jump Server (i-d) のSubnet変更
+
+**重要**: Jump ServerはPrivate SubnetからPublic Subnetに移動されました。
+
+**理由**: 
+- Private SubnetではSSM AgentがAWSと通信できない
+- NAT Gateway追加は月額$32の追加コスト
+- VPC Endpoints追加も月額$22の追加コスト
+- Public Subnet配置でSSM経由のみアクセスなら追加コストなし
+
+**影響**:
+- Jump Serverが一時的に再作成されます（インスタンスIDが変わります）
+- Public IPが割り当てられますが、SSH portは閉じているので問題ありません
+- SSM Session Manager経由でのみアクセス可能（セキュア）
+
+```bash
+# terraform apply実行時、Jump Serverが再作成される
+cd /Users/tk/git/Kishax/infrastructure/terraform
+terraform apply
+
+# 適用後、新しいインスタンスIDを確認
+terraform output jump_server_instance_id
 ```
 
 ---
@@ -254,6 +278,68 @@ echo "i-a Private IP: $INSTANCE_ID_A_PRIVATE_IP"
 ---
 
 ## EC2インスタンスへのアクセス方法
+
+### Jump Serverの事前確認
+
+Port Forwardingを使用する前に、Jump Server (i-d) のSSM Agent接続状態を確認してください：
+
+```bash
+# 1. インスタンスが起動しているか確認
+aws ec2 describe-instances \
+  --instance-ids $INSTANCE_ID_D \
+  --profile AdministratorAccess-126112056177 \
+  --query 'Reservations[0].Instances[0].{State:State.Name,IAM:IamInstanceProfile.Arn}' \
+  --output table
+
+# 2. SSM Agentが接続されているか確認
+aws ssm describe-instance-information \
+  --profile AdministratorAccess-126112056177 \
+  --filters "Key=InstanceIds,Values=$INSTANCE_ID_D" \
+  --query 'InstanceInformationList[0].{InstanceId:InstanceId,PingStatus:PingStatus,AgentVersion:AgentVersion,LastPingDateTime:LastPingDateTime}' \
+  --output table
+
+# 3. 直接SSM接続テスト（正常動作確認）
+aws ssm start-session \
+  --profile AdministratorAccess-126112056177 \
+  --target $INSTANCE_ID_D
+```
+
+**期待される結果**:
+- **State**: `running`
+- **PingStatus**: `Online`
+- **AgentVersion**: `3.x.x` 以上
+
+**トラブルシューティング**:
+- `TargetNotConnected` エラーが出る場合:
+  1. **インスタンスが停止している** → 起動してから2-3分待つ
+     ```bash
+     # Jump Serverを起動
+     aws ec2 start-instances \
+       --instance-ids $INSTANCE_ID_D \
+       --profile AdministratorAccess-126112056177
+     
+     # 起動完了を待つ（1-2分）
+     sleep 120
+     
+     # 再度SSM接続確認
+     aws ssm describe-instance-information \
+       --profile AdministratorAccess-126112056177 \
+       --filters "Key=InstanceIds,Values=$INSTANCE_ID_D" \
+       --query 'InstanceInformationList[0].PingStatus' \
+       --output text
+     # → "Online" になるまで待つ
+     ```
+  2. **SSM Agentが起動していない** → インスタンスを再起動
+     ```bash
+     aws ec2 reboot-instances \
+       --instance-ids $INSTANCE_ID_D \
+       --profile AdministratorAccess-126112056177
+     ```
+  3. **IAM Roleが付与されていない** → Terraform apply実行
+     ```bash
+     cd /Users/tk/git/Kishax/infrastructure/terraform
+     terraform apply
+     ```
 
 ### 方法1: Jump Server経由のSSH Port Forwarding（推奨）
 

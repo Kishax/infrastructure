@@ -211,13 +211,14 @@ resource "aws_ec2_tag" "web_server_schedule" {
 # - On-Demand (rarely used, cost minimal)
 # - t2.micro (smallest)
 # - On-demand only (manual start/stop)
+# - Public subnet for SSM Agent connectivity (no NAT Gateway cost)
 resource "aws_instance" "jump_server" {
   ami           = data.aws_ami.amazon_linux_2.id
   instance_type = "t2.micro"
   
-  subnet_id                   = var.private_subnet_ids[1]
+  subnet_id                   = var.public_subnet_ids[0]
   vpc_security_group_ids      = [var.jump_server_sg_id]
-  associate_public_ip_address = false  # Private subnet
+  associate_public_ip_address = true  # Public subnet for SSM connectivity
   
   iam_instance_profile = var.jump_server_instance_profile
   key_name            = var.ec2_key_pair_name

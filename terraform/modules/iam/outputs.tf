@@ -39,3 +39,31 @@ output "jump_server_instance_profile_name" {
   description = "Jump Server Instance Profile Name"
   value       = aws_iam_instance_profile.jump_server.name
 }
+
+# SQS Access User Outputs
+output "sqs_access_user_name" {
+  description = "SQS Access IAM User Name"
+  value       = aws_iam_user.sqs_access.name
+}
+
+output "sqs_access_key_id" {
+  description = "SQS Access Key ID (stored in SSM)"
+  value       = aws_iam_access_key.sqs_access.id
+  sensitive   = true
+}
+
+output "sqs_secret_access_key" {
+  description = "SQS Secret Access Key (stored in SSM)"
+  value       = aws_iam_access_key.sqs_access.secret
+  sensitive   = true
+}
+
+output "sqs_access_key_ssm_parameter" {
+  description = "SSM Parameter name for SQS Access Key ID"
+  value       = aws_ssm_parameter.sqs_access_key_id.name
+}
+
+output "sqs_secret_access_key_ssm_parameter" {
+  description = "SSM Parameter name for SQS Secret Access Key"
+  value       = aws_ssm_parameter.sqs_secret_access_key.name
+}

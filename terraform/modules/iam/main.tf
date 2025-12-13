@@ -254,3 +254,70 @@ resource "aws_iam_instance_profile" "jump_server" {
   name = "kishax-${var.environment}-jump-server-profile"
   role = aws_iam_role.jump_server.name
 }
+
+# ============================================================================
+# SQS Access User (Docker containers用)
+# ============================================================================
+
+# SQS Access IAM User
+resource "aws_iam_user" "sqs_access" {
+  name = "kishax-${var.environment}-sqs-access"
+  
+  tags = {
+    Name        = "kishax-${var.environment}-sqs-access"
+    Description = "SQS access for Docker containers"
+  }
+}
+
+# SQS Access Policy
+resource "aws_iam_user_policy" "sqs_access" {
+  name = "kishax-${var.environment}-sqs-access-policy"
+  user = aws_iam_user.sqs_access.name
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "sqs:SendMessage",
+          "sqs:ReceiveMessage",
+          "sqs:DeleteMessage",
+          "sqs:GetQueueAttributes",
+          "sqs:GetQueueUrl",
+          "sqs:ChangeMessageVisibility"
+        ]
+        Resource = "arn:aws:sqs:*:*:kishax-${var.environment}-*"
+      }
+    ]
+  })
+}
+
+# Access Key for SQS User
+resource "aws_iam_access_key" "sqs_access" {
+  user = aws_iam_user.sqs_access.name
+}
+
+# Store Access Key ID in SSM Parameter Store
+resource "aws_ssm_parameter" "sqs_access_key_id" {
+  name        = "/kishax/${var.environment}/sqs/access-key-id"
+  description = "SQS Access Key ID for Docker containers"
+  type        = "SecureString"
+  value       = aws_iam_access_key.sqs_access.id
+
+  tags = {
+    Name = "kishax-${var.environment}-sqs-access-key-id"
+  }
+}
+
+# Store Secret Access Key in SSM Parameter Store
+resource "aws_ssm_parameter" "sqs_secret_access_key" {
+  name        = "/kishax/${var.environment}/sqs/secret-access-key"
+  description = "SQS Secret Access Key for Docker containers"
+  type        = "SecureString"
+  value       = aws_iam_access_key.sqs_access.secret
+
+  tags = {
+    Name = "kishax-${var.environment}-sqs-secret-access-key"
+  }
+}

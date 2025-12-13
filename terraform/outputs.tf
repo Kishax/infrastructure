@@ -102,3 +102,14 @@ output "web_domain_record" {
   description = "Web Application Domain Record"
   value       = "${var.web_domain_name} -> ${module.cloudfront.cloudfront_domain_name}"
 }
+
+# SQS Access Credentials (stored in SSM)
+output "sqs_access_key_id_parameter" {
+  description = "SSM Parameter name for SQS Access Key ID"
+  value       = module.iam.sqs_access_key_ssm_parameter
+}
+
+output "sqs_secret_access_key_parameter" {
+  description = "SSM Parameter name for SQS Secret Access Key"
+  value       = module.iam.sqs_secret_access_key_ssm_parameter
+}

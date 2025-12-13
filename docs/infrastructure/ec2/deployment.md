@@ -95,25 +95,42 @@ export API_SERVER_PRIVATE_IP=$(terraform output -raw api_server_private_ip)
 
 ### 2. SSM Parameter Storeに機密情報を保存
 
-#### SQS認証情報の保存
+#### SQS認証情報（Terraformで自動作成済み）
 
+✅ **SQS用のIAMユーザーとアクセスキーはTerraformで自動作成されます**
+
+Terraform適用時に以下が自動的に作成されます：
+- IAMユーザー: `kishax-production-sqs-access`
+- アクセスキーとシークレットキー
+- SSM Parameter Store:
+  - `/kishax/production/sqs/access-key-id`
+  - `/kishax/production/sqs/secret-access-key`
+
+確認方法：
 ```bash
-# SQS Access Key IDを保存
-aws ssm put-parameter \
+# SSM Parameterが作成されているか確認
+aws ssm get-parameter \
   --profile AdministratorAccess-126112056177 \
   --name "/kishax/production/sqs/access-key-id" \
-  --value "YOUR_ACCESS_KEY_ID" \
-  --type "SecureString" \
-  --overwrite
+  --query "Parameter.Value" \
+  --output text
 
-# SQS Secret Access Keyを保存
-aws ssm put-parameter \
-  --profile AdministratorAccess-126112056177 \
-  --name "/kishax/production/sqs/secret-access-key" \
-  --value "YOUR_SECRET_ACCESS_KEY" \
-  --type "SecureString" \
-  --overwrite
+# Terraform outputsで確認
+cd terraform
+terraform output sqs_access_key_id_parameter
+terraform output sqs_secret_access_key_parameter
 ```
+
+> **Note**: 旧環境でSQS用のIAMユーザーがある場合は、事前に削除してください：
+> ```bash
+> # 旧IAMユーザーの確認
+> aws iam list-users --profile AdministratorAccess-126112056177 | grep sqs
+> 
+> # 削除（例）
+> aws iam delete-access-key --user-name OLD_SQS_USER --access-key-id XXXX --profile AdministratorAccess-126112056177
+> aws iam delete-user-policy --user-name OLD_SQS_USER --policy-name POLICY_NAME --profile AdministratorAccess-126112056177
+> aws iam delete-user --user-name OLD_SQS_USER --profile AdministratorAccess-126112056177
+> ```
 
 #### Discord Bot認証情報の保存
 

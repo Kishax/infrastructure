@@ -47,3 +47,5 @@ infra/delete-cloudformation-and-standardize
   - `.gitignore`: CloudFormation関連の除外設定を削除
 
 特に、[./ec2/requirements-delete-cloudformation-and-standardize.md](./ec2/requirements-delete-cloudformation-and-standardize.md) にはCloudformation関連ファイルを削除するにあたっての要件と意図が書かれてある。
+
+おそらく、テスト環境を作るのはまた別のブランチになりそう。（変更量が多いため。）

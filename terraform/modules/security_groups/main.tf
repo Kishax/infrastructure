@@ -236,3 +236,40 @@ resource "aws_security_group" "rds" {
     Name = "kishax-${var.environment}-rds-sg"
   }
 }
+
+# ============================================================================
+# Jump Server SSH Access Rules (Port Forwarding用)
+# ============================================================================
+
+# Jump Server から MC Server へのSSH
+resource "aws_security_group_rule" "mc_server_ssh_from_jump" {
+  type                     = "ingress"
+  from_port                = 22
+  to_port                  = 22
+  protocol                 = "tcp"
+  source_security_group_id = aws_security_group.jump_server.id
+  security_group_id        = aws_security_group.mc_server.id
+  description              = "SSH from Jump Server for Port Forwarding"
+}
+
+# Jump Server から API Server へのSSH
+resource "aws_security_group_rule" "api_server_ssh_from_jump" {
+  type                     = "ingress"
+  from_port                = 22
+  to_port                  = 22
+  protocol                 = "tcp"
+  source_security_group_id = aws_security_group.jump_server.id
+  security_group_id        = aws_security_group.api_server.id
+  description              = "SSH from Jump Server for Port Forwarding"
+}
+
+# Jump Server から Web Server へのSSH
+resource "aws_security_group_rule" "web_server_ssh_from_jump" {
+  type                     = "ingress"
+  from_port                = 22
+  to_port                  = 22
+  protocol                 = "tcp"
+  source_security_group_id = aws_security_group.jump_server.id
+  security_group_id        = aws_security_group.web_server.id
+  description              = "SSH from Jump Server for Port Forwarding"
+}

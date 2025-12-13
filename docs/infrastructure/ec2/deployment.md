@@ -220,6 +220,83 @@ echo "i-a: $INSTANCE_ID_A"
 
 ---
 
+## EC2インスタンスへのアクセス方法
+
+### 方法1: Jump Server経由のSSH Port Forwarding（推奨）
+
+セキュリティ上、SSHキーをJump Serverに配置せず、ローカルから直接操作できます。
+
+#### i-b (API Server)への接続
+
+```bash
+# ターミナル1: Port Forwardingセッション開始
+aws ssm start-session \
+  --profile AdministratorAccess-126112056177 \
+  --target $(terraform output -raw jump_server_instance_id) \
+  --document-name AWS-StartPortForwardingSessionToRemoteHost \
+  --parameters "{\"host\":[\"${API_SERVER_PRIVATE_IP}\"],\"portNumber\":[\"22\"],\"localPortNumber\":[\"2222\"]}"
+
+# ターミナル2: SSHで接続（別ターミナルで実行）
+ssh -i /Users/tk/git/Kishax/infrastructure/minecraft.pem -p 2222 ec2-user@localhost
+```
+
+#### i-c (Web Server)への接続
+
+```bash
+# WEB_SERVER_PRIVATE_IPを取得
+export WEB_SERVER_PRIVATE_IP=$(cd terraform && terraform output -raw web_server_private_ip || aws ec2 describe-instances --instance-ids $(terraform output -raw web_server_instance_id) --query 'Reservations[0].Instances[0].PrivateIpAddress' --output text --profile AdministratorAccess-126112056177)
+
+# ターミナル1: Port Forwardingセッション開始
+aws ssm start-session \
+  --profile AdministratorAccess-126112056177 \
+  --target $(terraform output -raw jump_server_instance_id) \
+  --document-name AWS-StartPortForwardingSessionToRemoteHost \
+  --parameters "{\"host\":[\"${WEB_SERVER_PRIVATE_IP}\"],\"portNumber\":[\"22\"],\"localPortNumber\":[\"2223\"]}"
+
+# ターミナル2: SSHで接続
+ssh -i /Users/tk/git/Kishax/infrastructure/minecraft.pem -p 2223 ec2-user@localhost
+```
+
+#### i-a (MC Server)への接続
+
+```bash
+# MC_SERVER_PRIVATE_IPを取得
+export MC_SERVER_PRIVATE_IP=$(cd terraform && aws ec2 describe-instances --instance-ids $(terraform output -raw mc_server_instance_id) --query 'Reservations[0].Instances[0].PrivateIpAddress' --output text --profile AdministratorAccess-126112056177)
+
+# ターミナル1: Port Forwardingセッション開始
+aws ssm start-session \
+  --profile AdministratorAccess-126112056177 \
+  --target $(terraform output -raw jump_server_instance_id) \
+  --document-name AWS-StartPortForwardingSessionToRemoteHost \
+  --parameters "{\"host\":[\"${MC_SERVER_PRIVATE_IP}\"],\"portNumber\":[\"22\"],\"localPortNumber\":[\"2224\"]}"
+
+# ターミナル2: SSHで接続
+ssh -i /Users/tk/git/Kishax/infrastructure/minecraft.pem -p 2224 ec2-user@localhost
+```
+
+### 方法2: 直接SSM Session Manager接続（非推奨）
+
+SSM Agent設定が正しければ直接接続も可能ですが、Port Forwardingの方が安定しています。
+
+```bash
+# 直接接続（設定によっては動作しない場合あり）
+aws ssm start-session \
+  --profile AdministratorAccess-126112056177 \
+  --target $INSTANCE_ID_B
+```
+
+> **Note**: Jump Server (i-d)は停止状態の場合があるため、使用前に起動してください：
+> ```bash
+> aws ec2 start-instances \
+>   --instance-ids $(terraform output -raw jump_server_instance_id) \
+>   --profile AdministratorAccess-126112056177
+> 
+> # 起動完了を待つ（1-2分）
+> sleep 120
+> ```
+
+---
+
 ## デプロイ手順
 
 ## Phase 1: i-b (API Server + Redis)
@@ -230,13 +307,29 @@ echo "i-a: $INSTANCE_ID_A"
 - MC Auth API起動
 - Discord Bot起動
 
-### 1-1. EC2にSSM Session Manager接続
+### 1-1. EC2にJump Server経由でSSH接続
 
 ```bash
+# Jump Server (i-d) を起動（停止している場合）
+aws ec2 start-instances \
+  --instance-ids $(terraform output -raw jump_server_instance_id) \
+  --profile AdministratorAccess-126112056177
+
+# 起動完了を待つ（1-2分）
+sleep 120
+
+# ターミナル1: Port Forwardingセッション開始
 aws ssm start-session \
   --profile AdministratorAccess-126112056177 \
-  --target $INSTANCE_ID_B
+  --target $(cd /Users/tk/git/Kishax/infrastructure/terraform && terraform output -raw jump_server_instance_id) \
+  --document-name AWS-StartPortForwardingSessionToRemoteHost \
+  --parameters "{\"host\":[\"${API_SERVER_PRIVATE_IP}\"],\"portNumber\":[\"22\"],\"localPortNumber\":[\"2222\"]}"
+
+# ターミナル2: SSHで接続（新しいターミナルを開いて実行）
+ssh -i /Users/tk/git/Kishax/infrastructure/minecraft.pem -p 2222 ec2-user@localhost
 ```
+
+> **Note**: Port Forwardingセッションは別ターミナルで起動したまま、新しいターミナルでSSH接続します。
 
 ### 1-2. 必要なソフトウェアのインストール確認
 
@@ -420,12 +513,21 @@ docker compose -f compose.yaml ps
 - Web Serverの起動
 - CloudFront経由でアクセス可能にする
 
-### 2-1. EC2にSSM Session Manager接続
+### 2-1. EC2にJump Server経由でSSH接続
 
 ```bash
+# WEB_SERVER_PRIVATE_IPを取得
+export WEB_SERVER_PRIVATE_IP=$(cd /Users/tk/git/Kishax/infrastructure/terraform && aws ec2 describe-instances --instance-ids $(terraform output -raw web_server_instance_id) --query 'Reservations[0].Instances[0].PrivateIpAddress' --output text --profile AdministratorAccess-126112056177)
+
+# ターミナル1: Port Forwardingセッション開始
 aws ssm start-session \
   --profile AdministratorAccess-126112056177 \
-  --target $INSTANCE_ID_C
+  --target $(cd /Users/tk/git/Kishax/infrastructure/terraform && terraform output -raw jump_server_instance_id) \
+  --document-name AWS-StartPortForwardingSessionToRemoteHost \
+  --parameters "{\"host\":[\"${WEB_SERVER_PRIVATE_IP}\"],\"portNumber\":[\"22\"],\"localPortNumber\":[\"2223\"]}"
+
+# ターミナル2: SSHで接続（新しいターミナルを開いて実行）
+ssh -i /Users/tk/git/Kishax/infrastructure/minecraft.pem -p 2223 ec2-user@localhost
 ```
 
 ### 2-2. 必要なソフトウェアのインストール確認
@@ -574,12 +676,21 @@ docker logs kishax-web
 - Route53 DNSの動的更新
 - ポート25565でのアクセス確認
 
-### 3-1. EC2にSSM Session Manager接続
+### 3-1. EC2にJump Server経由でSSH接続
 
 ```bash
+# MC_SERVER_PRIVATE_IPを取得
+export MC_SERVER_PRIVATE_IP=$(cd /Users/tk/git/Kishax/infrastructure/terraform && aws ec2 describe-instances --instance-ids $(terraform output -raw mc_server_instance_id) --query 'Reservations[0].Instances[0].PrivateIpAddress' --output text --profile AdministratorAccess-126112056177)
+
+# ターミナル1: Port Forwardingセッション開始
 aws ssm start-session \
   --profile AdministratorAccess-126112056177 \
-  --target $INSTANCE_ID_A
+  --target $(cd /Users/tk/git/Kishax/infrastructure/terraform && terraform output -raw jump_server_instance_id) \
+  --document-name AWS-StartPortForwardingSessionToRemoteHost \
+  --parameters "{\"host\":[\"${MC_SERVER_PRIVATE_IP}\"],\"portNumber\":[\"22\"],\"localPortNumber\":[\"2224\"]}"
+
+# ターミナル2: SSHで接続（新しいターミナルを開いて実行）
+ssh -i /Users/tk/git/Kishax/infrastructure/minecraft.pem -p 2224 ec2-user@localhost
 ```
 
 ### 3-2. 必要なソフトウェアのインストール確認

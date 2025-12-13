@@ -80,6 +80,8 @@ terraform output
 
 #### ⚠️ Spotインスタンス再作成時のエラー対処
 
+##### エラー1: 複数インスタンスのマッチ
+
 `terraform apply`でSpotインスタンス（i-b, i-c）を再作成する場合、以下のエラーが発生することがあります：
 
 ```
@@ -91,10 +93,22 @@ Error: multiple EC2 Instances matched; use additional constraints to reduce matc
 **対処法**: 古いインスタンスを手動で強制終了してから、再度`terraform apply`を実行
 
 ```bash
-# 1. エラーメッセージから古いインスタンスIDを確認
-# （例: i-0c179bef38c95181c）
+# 1. 古いインスタンスIDを取得（該当するインスタンスタイプで検索）
+# i-b (API Server)の場合
+aws ec2 describe-instances \
+  --profile AdministratorAccess-126112056177 \
+  --filters "Name=instance-state-name,Values=running,shutting-down" "Name=instance-type,Values=t3.small" \
+  --query 'Reservations[*].Instances[*].{ID:InstanceId,State:State.Name,SpotRequest:SpotInstanceRequestId,Subnet:SubnetId}' \
+  --output table
 
-# 2. 古いインスタンスを強制終了
+# i-c (Web Server)の場合
+aws ec2 describe-instances \
+  --profile AdministratorAccess-126112056177 \
+  --filters "Name=instance-state-name,Values=running,shutting-down" "Name=instance-type,Values=t2.micro" \
+  --query 'Reservations[*].Instances[*].{ID:InstanceId,State:State.Name,SpotRequest:SpotInstanceRequestId,Subnet:SubnetId}' \
+  --output table
+
+# 2. 古いインスタンス（古いSubnetにあるもの）を強制終了
 aws ec2 terminate-instances \
   --instance-ids i-0c179bef38c95181c \
   --profile AdministratorAccess-126112056177
@@ -110,6 +124,55 @@ aws ec2 describe-instances \
 cd /Users/tk/git/Kishax/infrastructure/terraform
 terraform apply
 ```
+
+##### エラー2: Spot Request terminated
+
+`terraform apply`後に以下のエラーが発生することがあります：
+
+```
+Error: reading EC2 Spot Instance Request (sir-xxxxx): terminated
+```
+
+**原因**: 新しく作成されたSpot Request自体がterminatedになった（Spot容量不足など）。
+
+**対処法**: Spot Requestをキャンセルし、Terraformのstateから削除してから再度`terraform apply`を実行
+
+```bash
+# 1. Spot Requestの状態確認（エラーメッセージからRequest IDを確認）
+aws ec2 describe-spot-instance-requests \
+  --spot-instance-request-ids sir-mb9fbtpn \
+  --profile AdministratorAccess-126112056177 \
+  --output table
+
+# 2. Spot Requestをキャンセル
+aws ec2 cancel-spot-instance-requests \
+  --spot-instance-request-ids sir-mb9fbtpn \
+  --profile AdministratorAccess-126112056177
+
+# 3. 関連するインスタンスIDを取得（もしあれば）
+aws ec2 describe-spot-instance-requests \
+  --spot-instance-request-ids sir-mb9fbtpn \
+  --profile AdministratorAccess-126112056177 \
+  --query 'SpotInstanceRequests[0].InstanceId' \
+  --output text
+
+# 4. インスタンスがあれば終了（<instance-id>を実際のIDに置き換え）
+aws ec2 terminate-instances \
+  --instance-ids <instance-id> \
+  --profile AdministratorAccess-126112056177
+
+# 5. Terraformのstateから削除
+cd /Users/tk/git/Kishax/infrastructure/terraform
+# i-bの場合
+terraform state rm module.ec2.aws_spot_instance_request.api_server
+# i-cの場合
+terraform state rm module.ec2.aws_spot_instance_request.web_server
+
+# 6. 再度terraform apply
+terraform apply
+```
+
+**Note**: Spot容量不足が継続する場合は、一時的にOn-Demandインスタンスに変更することを検討してください。
 
 #### ⚠️ Jump Server (i-d) のSubnet変更
 

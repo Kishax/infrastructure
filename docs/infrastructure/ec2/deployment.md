@@ -76,6 +76,43 @@ terraform output
 
 ## 準備作業
 
+### 0. Terraform適用時の注意事項
+
+⚠️ **Spotインスタンス再作成時のエラー対処**
+
+`terraform apply`でSpotインスタンス（i-b, i-c）を再作成する場合、以下のエラーが発生することがあります：
+
+```
+Error: multiple EC2 Instances matched; use additional constraints to reduce matches to a single EC2 Instance
+```
+
+**原因**: 古いSpotインスタンスの削除完了前に、新しいSpotインスタンスが作成されたため。
+
+**対処法**: 古いインスタンスを手動で強制終了してから、再度`terraform apply`を実行
+
+```bash
+# 1. エラーメッセージから古いインスタンスIDを確認
+# （例: i-0c179bef38c95181c）
+
+# 2. 古いインスタンスを強制終了
+aws ec2 terminate-instances \
+  --instance-ids i-0c179bef38c95181c \
+  --profile AdministratorAccess-126112056177
+
+# 3. インスタンスの状態を確認（terminated になるまで待つ）
+aws ec2 describe-instances \
+  --instance-ids i-0c179bef38c95181c \
+  --profile AdministratorAccess-126112056177 \
+  --query 'Reservations[0].Instances[0].State.Name' \
+  --output text
+
+# 4. terminated になったら terraform apply を再実行
+cd /Users/tk/git/Kishax/infrastructure/terraform
+terraform apply
+```
+
+---
+
 ### 1. Terraform出力情報を取得
 
 ```bash

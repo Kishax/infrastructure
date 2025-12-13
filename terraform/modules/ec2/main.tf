@@ -108,7 +108,7 @@ resource "aws_spot_instance_request" "api_server" {
   }
 
   tags = {
-    Name     = "kishax-${var.environment}-api-server"
+    Name     = "kishax-${var.environment}-api-server-spot-request"
     Instance = "i-b"
     Role     = "API-Server-Redis"
     Schedule = "24/7"
@@ -117,6 +117,31 @@ resource "aws_spot_instance_request" "api_server" {
   lifecycle {
     ignore_changes = [ami]
   }
+}
+
+# Add tags to the actual API server instance
+resource "aws_ec2_tag" "api_server_name" {
+  resource_id = data.aws_instance.api_server.id
+  key         = "Name"
+  value       = "kishax-${var.environment}-api-server"
+}
+
+resource "aws_ec2_tag" "api_server_instance" {
+  resource_id = data.aws_instance.api_server.id
+  key         = "Instance"
+  value       = "i-b"
+}
+
+resource "aws_ec2_tag" "api_server_role" {
+  resource_id = data.aws_instance.api_server.id
+  key         = "Role"
+  value       = "API-Server-Redis"
+}
+
+resource "aws_ec2_tag" "api_server_schedule" {
+  resource_id = data.aws_instance.api_server.id
+  key         = "Schedule"
+  value       = "24/7"
 }
 
 # EC2 Instance: Web Server (i-c)
@@ -146,7 +171,7 @@ resource "aws_spot_instance_request" "web_server" {
   }
 
   tags = {
-    Name     = "kishax-${var.environment}-web-server"
+    Name     = "kishax-${var.environment}-web-server-spot-request"
     Instance = "i-c"
     Role     = "Web-Discord-Bot"
     Schedule = "24/7"
@@ -155,6 +180,31 @@ resource "aws_spot_instance_request" "web_server" {
   lifecycle {
     ignore_changes = [ami]
   }
+}
+
+# Add tags to the actual Web server instance
+resource "aws_ec2_tag" "web_server_name" {
+  resource_id = data.aws_instance.web_server.id
+  key         = "Name"
+  value       = "kishax-${var.environment}-web-server"
+}
+
+resource "aws_ec2_tag" "web_server_instance" {
+  resource_id = data.aws_instance.web_server.id
+  key         = "Instance"
+  value       = "i-c"
+}
+
+resource "aws_ec2_tag" "web_server_role" {
+  resource_id = data.aws_instance.web_server.id
+  key         = "Role"
+  value       = "Web-Discord-Bot"
+}
+
+resource "aws_ec2_tag" "web_server_schedule" {
+  resource_id = data.aws_instance.web_server.id
+  key         = "Schedule"
+  value       = "24/7"
 }
 
 # EC2 Instance: Jump Server (i-d)

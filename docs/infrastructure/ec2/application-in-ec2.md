@@ -19,8 +19,8 @@
 | インスタンス | アプリケーション | Docker Compose | ポート | データベース | Redis |
 |------------|----------------|---------------|--------|------------|-------|
 | **i-a (MC Server)** | Minecraft Server (Java) | `apps/mc/compose.yml` | 25565, 25577 | RDS MySQL | ローカル（コンテナ内） |
-| **i-b (API Server)** | Backend API + SQS Bridge | `apps/api/compose.yaml` | 8080 | RDS PostgreSQL | **ホスト側（2つ）** |
-| **i-c (Web Server)** | Next.js Web + Discord Bot | `apps/web/compose.yaml`<br/>`apps/discord/compose.yaml` | 3000 | RDS PostgreSQL | i-b のホストRedis |
+| **i-b (API Server)** | Backend API + SQS Bridge + Discord Bot | `apps/api/compose.yaml`<br/>`apps/discord/compose.yaml` | 8080 | RDS PostgreSQL | **ホスト側（2つ）** |
+| **i-c (Web Server)** | Next.js Web | `apps/web/compose.yaml` | 3000 | RDS PostgreSQL | i-b のホストRedis |
 | **i-d (Jump Server)** | なし（踏み台のみ） | - | - | - | - |
 
 ---
@@ -104,7 +104,7 @@ WantedBy=multi-user.target
 ### Redis #2: Web + Discord用（ポート 6380）
 
 **用途**: Web/Discord BotからのRedis Pub/Sub、セッション管理  
-**接続元**: i-c (Web Server, Discord Bot)  
+**接続元**: i-b (Discord Bot - localhost), i-c (Web Server - remote)  
 **設定ファイル**: `/etc/redis/redis-web.conf`
 
 ```conf
@@ -386,6 +386,51 @@ services:
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
     command: ["java", "-jar", "/app/mc-auth.jar"]
     restart: unless-stopped
+
+  # Discord Bot Service
+  discord-bot:
+    build:
+      context: ../discord
+      dockerfile: Dockerfile
+    container_name: kishax-discord-bot
+    environment:
+      # AWS Configuration
+      - AWS_REGION=${AWS_REGION}
+      - MC_WEB_SQS_ACCESS_KEY_ID=${MC_WEB_SQS_ACCESS_KEY_ID}
+      - MC_WEB_SQS_SECRET_ACCESS_KEY=${MC_WEB_SQS_SECRET_ACCESS_KEY}
+      # SQS Queue URLs
+      - TO_WEB_QUEUE_URL=${TO_WEB_QUEUE_URL}
+      - TO_MC_QUEUE_URL=${TO_MC_QUEUE_URL}
+      - TO_DISCORD_QUEUE_URL=${TO_DISCORD_QUEUE_URL}
+      # Redis Configuration (ホスト側Redis #2)
+      - REDIS_URL=${REDIS_URL:-redis://host.docker.internal:6380}
+      - REDIS_CONNECTION_TIMEOUT=${REDIS_CONNECTION_TIMEOUT:-5000}
+      - REDIS_COMMAND_TIMEOUT=${REDIS_COMMAND_TIMEOUT:-3000}
+      # Discord Configuration
+      - DISCORD_TOKEN=${DISCORD_TOKEN}
+      - DISCORD_CHANNEL_ID=${DISCORD_CHANNEL_ID}
+      - DISCORD_CHAT_CHANNEL_ID=${DISCORD_CHAT_CHANNEL_ID}
+      - DISCORD_ADMIN_CHANNEL_ID=${DISCORD_ADMIN_CHANNEL_ID}
+      - DISCORD_RULE_CHANNEL_ID=${DISCORD_RULE_CHANNEL_ID}
+      - DISCORD_RULE_MESSAGE_ID=${DISCORD_RULE_MESSAGE_ID}
+      - DISCORD_PRESENCE_ACTIVITY=${DISCORD_PRESENCE_ACTIVITY:-Kishaxサーバー}
+      - DISCORD_GUILD_ID=${DISCORD_GUILD_ID}
+      - BE_DEFAULT_EMOJI_NAME=${BE_DEFAULT_EMOJI_NAME:-steve}
+      # SQS Configuration for Discord
+      - AWS_SQS_MAX_MESSAGES=${AWS_SQS_MAX_MESSAGES:-10}
+      - AWS_SQS_WAIT_TIME_SECONDS=${AWS_SQS_WAIT_TIME_SECONDS:-20}
+      # Queue Mode Configuration
+      - QUEUE_MODE=${QUEUE_MODE:-DISCORD}
+      - SQS_WORKER_ENABLED=${SQS_WORKER_ENABLED:-false}
+      - SQS_WORKER_POLLING_INTERVAL=${SQS_WORKER_POLLING_INTERVAL:-5}
+      - SQS_WORKER_MAX_MESSAGES=${SQS_WORKER_MAX_MESSAGES:-10}
+      - SQS_WORKER_WAIT_TIME=${SQS_WORKER_WAIT_TIME:-20}
+      - SQS_WORKER_VISIBILITY_TIMEOUT=${SQS_WORKER_VISIBILITY_TIMEOUT:-300}
+      # Application Configuration
+      - SHUTDOWN_GRACE_PERIOD=${SHUTDOWN_GRACE_PERIOD:-10}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
 ```
 
 #### 2. .envファイル作成
@@ -427,6 +472,17 @@ QUEUE_MODE=WEB
 # Authentication API
 AUTH_API_KEY=<新規生成またはSSMから>
 
+# Discord Bot Configuration
+DISCORD_TOKEN=<Discord Bot Token>
+DISCORD_CHANNEL_ID=<Channel ID>
+DISCORD_CHAT_CHANNEL_ID=<Chat Channel ID>
+DISCORD_ADMIN_CHANNEL_ID=<Admin Channel ID>
+DISCORD_RULE_CHANNEL_ID=<Rule Channel ID>
+DISCORD_RULE_MESSAGE_ID=<Rule Message ID>
+DISCORD_GUILD_ID=<Guild ID>
+DISCORD_PRESENCE_ACTIVITY=Kishaxサーバー
+BE_DEFAULT_EMOJI_NAME=steve
+
 # Logging
 LOG_LEVEL=INFO
 EOF
@@ -445,11 +501,15 @@ docker-compose up -d
 
 # ログ確認
 docker-compose logs -f
+
+# 各サービスの状態確認
+docker-compose ps
+# mc-auth, sqs-redis-bridge, discord-bot が全てUpであることを確認
 ```
 
 ---
 
-### i-c: Web + Discord Bot
+### i-c: Web Server
 
 #### 1. Web compose.yamlの修正
 
@@ -492,54 +552,7 @@ services:
     restart: unless-stopped
 ```
 
-#### 2. Discord compose.yamlの修正
-
-**修正後** (`apps/discord/compose-ec2.yaml`):
-
-```yaml
-services:
-  discord-bot:
-    build: .
-    container_name: kishax-discord-bot
-    environment:
-      # AWS Configuration
-      AWS_REGION: ${AWS_REGION}
-      MC_WEB_SQS_ACCESS_KEY_ID: ${MC_WEB_SQS_ACCESS_KEY_ID}
-      MC_WEB_SQS_SECRET_ACCESS_KEY: ${MC_WEB_SQS_SECRET_ACCESS_KEY}
-      # SQS Queue URLs
-      TO_WEB_QUEUE_URL: ${TO_WEB_QUEUE_URL}
-      TO_MC_QUEUE_URL: ${TO_MC_QUEUE_URL}
-      TO_DISCORD_QUEUE_URL: ${TO_DISCORD_QUEUE_URL}
-      # Redis Configuration (i-b host Redis #2)
-      REDIS_URL: ${REDIS_URL:-redis://10.0.36.61:6380}
-      REDIS_CONNECTION_TIMEOUT: ${REDIS_CONNECTION_TIMEOUT:-5000}
-      REDIS_COMMAND_TIMEOUT: ${REDIS_COMMAND_TIMEOUT:-3000}
-      # Discord Configuration
-      DISCORD_TOKEN: ${DISCORD_TOKEN}
-      DISCORD_CHANNEL_ID: ${DISCORD_CHANNEL_ID}
-      DISCORD_CHAT_CHANNEL_ID: ${DISCORD_CHAT_CHANNEL_ID}
-      DISCORD_ADMIN_CHANNEL_ID: ${DISCORD_ADMIN_CHANNEL_ID}
-      DISCORD_RULE_CHANNEL_ID: ${DISCORD_RULE_CHANNEL_ID}
-      DISCORD_RULE_MESSAGE_ID: ${DISCORD_RULE_MESSAGE_ID}
-      DISCORD_PRESENCE_ACTIVITY: ${DISCORD_PRESENCE_ACTIVITY:-Kishaxサーバー}
-      DISCORD_GUILD_ID: ${DISCORD_GUILD_ID}
-      BE_DEFAULT_EMOJI_NAME: ${BE_DEFAULT_EMOJI_NAME:-steve}
-      # SQS Configuration
-      AWS_SQS_MAX_MESSAGES: ${AWS_SQS_MAX_MESSAGES:-10}
-      AWS_SQS_WAIT_TIME_SECONDS: ${AWS_SQS_WAIT_TIME_SECONDS:-20}
-      # Queue Mode Configuration
-      QUEUE_MODE: ${QUEUE_MODE:-DISCORD}
-      SQS_WORKER_ENABLED: ${SQS_WORKER_ENABLED:-false}
-      SQS_WORKER_POLLING_INTERVAL: ${SQS_WORKER_POLLING_INTERVAL:-5}
-      SQS_WORKER_MAX_MESSAGES: ${SQS_WORKER_MAX_MESSAGES:-10}
-      SQS_WORKER_WAIT_TIME: ${SQS_WORKER_WAIT_TIME:-20}
-      SQS_WORKER_VISIBILITY_TIMEOUT: ${SQS_WORKER_VISIBILITY_TIMEOUT:-300}
-      # Application Configuration
-      SHUTDOWN_GRACE_PERIOD: ${SHUTDOWN_GRACE_PERIOD:-10}
-    restart: unless-stopped
-```
-
-#### 3. .envファイル作成
+#### 2. .envファイル作成
 
 ```bash
 # SSM Session Manager経由でi-cに接続
@@ -581,42 +594,9 @@ INTERNAL_API_KEY=<新規生成>
 EOF
 
 chmod 600 .env
-
-# Discord用.envファイル
-cd /opt/discord
-cat > .env << 'EOF'
-# AWS Configuration
-AWS_REGION=ap-northeast-1
-MC_WEB_SQS_ACCESS_KEY_ID=<SSM>
-MC_WEB_SQS_SECRET_ACCESS_KEY=<SSM>
-
-# SQS Queues
-TO_WEB_QUEUE_URL=<terraform output>
-TO_MC_QUEUE_URL=<terraform output>
-TO_DISCORD_QUEUE_URL=<terraform output>
-
-# Redis (i-b Redis #2)
-REDIS_URL=redis://10.0.36.61:6380
-
-# Discord Configuration
-DISCORD_TOKEN=<Discord Bot Token>
-DISCORD_CHANNEL_ID=<Channel ID>
-DISCORD_CHAT_CHANNEL_ID=<Chat Channel ID>
-DISCORD_ADMIN_CHANNEL_ID=<Admin Channel ID>
-DISCORD_RULE_CHANNEL_ID=<Rule Channel ID>
-DISCORD_RULE_MESSAGE_ID=<Rule Message ID>
-DISCORD_GUILD_ID=<Guild ID>
-DISCORD_PRESENCE_ACTIVITY=Kishaxサーバー
-BE_DEFAULT_EMOJI_NAME=steve
-
-# Queue Mode
-QUEUE_MODE=DISCORD
-EOF
-
-chmod 600 .env
 ```
 
-#### 4. デプロイ
+#### 3. デプロイ
 
 ```bash
 # Web起動
@@ -624,14 +604,8 @@ cd /opt/web
 cp /path/to/apps/web/compose-ec2.yaml docker-compose.yml
 docker-compose up -d
 
-# Discord Bot起動
-cd /opt/discord
-cp /path/to/apps/discord/compose-ec2.yaml docker-compose.yml
-docker-compose up -d
-
 # ログ確認
-cd /opt/web && docker-compose logs -f
-cd /opt/discord && docker-compose logs -f
+docker-compose logs -f
 ```
 
 ---
@@ -695,22 +669,21 @@ echo "DISCORD_TOKEN=$(get_param /kishax/production/discord/bot-token)"
 - [ ] Velocity起動確認（port 25577）
 - [ ] 画像保存ディレクトリ権限確認（/mc/server/images）
 
-### i-b (API Server)
+### i-b (API Server + Discord Bot)
 - [ ] Redis #1 (port 6379) 起動確認
 - [ ] Redis #2 (port 6380) 起動確認
 - [ ] RDS PostgreSQL接続確認
 - [ ] MC Auth API起動確認（port 8080）
 - [ ] SQS Redis Bridge起動確認
-- [ ] SQSキュー接続確認
+- [ ] Discord Bot起動確認
+- [ ] Discord Bot Discord接続確認
+- [ ] SQSキュー接続確認（全サービス）
 
-### i-c (Web + Discord)
+### i-c (Web Server)
 - [ ] RDS PostgreSQL接続確認
 - [ ] i-b Redis #2 (port 6380)接続確認
 - [ ] Next.js Web起動確認（port 3000）
 - [ ] CloudFront経由でのアクセス確認（https://kishax.net）
-- [ ] Discord Bot起動確認
-- [ ] Discord Bot接続確認
-- [ ] SQSキュー接続確認
 
 ---
 

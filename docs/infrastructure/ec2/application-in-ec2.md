@@ -19,7 +19,7 @@
 | インスタンス | アプリケーション | Docker Compose | ポート | データベース | Redis |
 |------------|----------------|---------------|--------|------------|-------|
 | **i-a (MC Server)** | Minecraft Server (Java) | `apps/mc/compose.yml` | 25565, 25577 | RDS MySQL | ローカル（コンテナ内） |
-| **i-b (API Server)** | Backend API + SQS Bridge + Discord Bot | `apps/api/compose.yaml`<br/>`apps/discord/compose.yaml` | 8080 | RDS PostgreSQL | **ホスト側（2つ）** |
+| **i-b (API Server)** | Backend API + SQS Bridge + Discord Bot | `apps/api/compose-ec2.yaml` | 8080 | RDS PostgreSQL | **ホスト側（2つ）** |
 | **i-c (Web Server)** | Next.js Web | `apps/web/compose.yaml` | 3000 | RDS PostgreSQL | i-b のホストRedis |
 | **i-d (Jump Server)** | なし（踏み台のみ） | - | - | - | - |
 
@@ -373,7 +373,7 @@ services:
   # Discord Bot Service
   discord-bot:
     build:
-      context: ../discord
+      context: ./discord-bot
       dockerfile: Dockerfile
     container_name: kishax-discord-bot
     environment:

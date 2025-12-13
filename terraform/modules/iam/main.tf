@@ -70,6 +70,12 @@ resource "aws_iam_role_policy" "mc_server_ssm" {
   })
 }
 
+# MC Server Policy - SSM Session Manager
+resource "aws_iam_role_policy_attachment" "mc_server_ssm_session" {
+  role       = aws_iam_role.mc_server.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+}
+
 # MC Server Instance Profile
 resource "aws_iam_instance_profile" "mc_server" {
   name = "kishax-${var.environment}-mc-server-profile"
@@ -142,6 +148,12 @@ resource "aws_iam_role_policy" "api_server_ssm" {
   })
 }
 
+# API Server Policy - SSM Session Manager
+resource "aws_iam_role_policy_attachment" "api_server_ssm_session" {
+  role       = aws_iam_role.api_server.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+}
+
 # API Server Instance Profile
 resource "aws_iam_instance_profile" "api_server" {
   name = "kishax-${var.environment}-api-server-profile"
@@ -212,6 +224,12 @@ resource "aws_iam_role_policy" "web_server_ssm" {
       }
     ]
   })
+}
+
+# Web Server Policy - SSM Session Manager
+resource "aws_iam_role_policy_attachment" "web_server_ssm_session" {
+  role       = aws_iam_role.web_server.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
 }
 
 # Web Server Instance Profile

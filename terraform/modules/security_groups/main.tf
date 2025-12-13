@@ -2,7 +2,8 @@
 
 # MC Server Security Group (i-a)
 resource "aws_security_group" "mc_server" {
-  name_description = "Security group for Minecraft Server (i-a)"
+  name        = "kishax-${var.environment}-mc-server-sg"
+  description = "Security group for Minecraft Server (i-a)"
   vpc_id      = var.vpc_id
 
   # Minecraft client connections

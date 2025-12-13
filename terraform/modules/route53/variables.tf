@@ -25,14 +25,17 @@ variable "mc_server_elastic_ip" {
 variable "web_domain_name" {
   description = "Web application domain name"
   type        = string
+  default     = ""  # オプショナル
 }
 
 variable "cloudfront_domain_name" {
   description = "CloudFront Distribution Domain Name"
   type        = string
+  default     = ""  # オプショナル
 }
 
 variable "cloudfront_zone_id" {
   description = "CloudFront Distribution Hosted Zone ID"
   type        = string
+  default     = ""  # オプショナル
 }

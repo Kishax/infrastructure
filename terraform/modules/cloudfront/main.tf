@@ -11,7 +11,7 @@ resource "aws_cloudfront_distribution" "web" {
   aliases = [var.web_domain_name]
 
   origin {
-    domain_name = var.web_server_public_ip
+    domain_name = var.web_server_public_dns
     origin_id   = "kishax-web-ec2"
 
     custom_origin_config {

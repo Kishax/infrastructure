@@ -16,7 +16,7 @@ resource "aws_db_instance" "postgres" {
 
   # Engine
   engine         = "postgres"
-  engine_version = "16.1"  # 最新の安定版
+  engine_version = "16.6"  # 利用可能な最新安定版
 
   # Instance
   instance_class        = var.postgres_instance_class
@@ -74,7 +74,7 @@ resource "aws_db_instance" "mysql" {
 
   # Engine
   engine         = "mysql"
-  engine_version = "8.0.35"  # 最新の安定版
+  engine_version = "8.0.40"  # 利用可能な最新安定版
 
   # Instance
   instance_class        = var.mysql_instance_class

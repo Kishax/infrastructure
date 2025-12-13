@@ -16,9 +16,11 @@ resource "aws_route53_record" "mc_server" {
 
 # Web Application Alias Record (CloudFront経由)
 resource "aws_route53_record" "web" {
-  zone_id = var.route53_zone_id
-  name    = var.web_domain_name
-  type    = "A"
+  count           = var.web_domain_name != "" ? 1 : 0
+  zone_id         = var.route53_zone_id
+  name            = var.web_domain_name
+  type            = "A"
+  allow_overwrite = true  # 既存レコードを上書き
 
   alias {
     name                   = var.cloudfront_domain_name

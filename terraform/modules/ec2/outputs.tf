@@ -35,6 +35,11 @@ output "web_server_public_ip" {
   value       = try(data.aws_instance.web_server.public_ip, "")
 }
 
+output "web_server_public_dns" {
+  description = "Web Server Public DNS"
+  value       = try(data.aws_instance.web_server.public_dns, "")
+}
+
 output "web_server_private_ip" {
   description = "Web Server Private IP"
   value       = try(data.aws_instance.web_server.private_ip, "")

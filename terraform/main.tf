@@ -110,10 +110,10 @@ module "ec2" {
   jump_server_sg_id         = module.security_groups.jump_server_sg_id
   
   # IAM Roles
-  mc_server_role_name       = module.iam.mc_server_role_name
-  api_server_role_name      = module.iam.api_server_role_name
-  web_server_role_name      = module.iam.web_server_role_name
-  jump_server_role_name     = module.iam.jump_server_role_name
+  mc_server_instance_profile   = module.iam.mc_server_instance_profile_name
+  api_server_instance_profile  = module.iam.api_server_instance_profile_name
+  web_server_instance_profile  = module.iam.web_server_instance_profile_name
+  jump_server_instance_profile = module.iam.jump_server_instance_profile_name
   
   # RDS Endpoints
   postgres_endpoint         = module.rds.postgres_endpoint
@@ -133,10 +133,10 @@ module "ec2" {
 module "cloudfront" {
   source = "./modules/cloudfront"
   
-  environment         = var.environment
-  web_server_public_ip = module.ec2.web_server_public_ip
-  web_domain_name     = var.web_domain_name
-  acm_certificate_arn = var.acm_certificate_arn
+  environment              = var.environment
+  web_server_public_dns    = module.ec2.web_server_public_dns
+  web_domain_name          = var.web_domain_name
+  acm_certificate_arn      = var.acm_certificate_arn
 }
 
 # Route53 Module

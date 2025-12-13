@@ -41,24 +41,24 @@ variable "jump_server_sg_id" {
   type        = string
 }
 
-# IAM Roles
-variable "mc_server_role_name" {
-  description = "MC Server IAM Role Name"
+# IAM Instance Profiles
+variable "mc_server_instance_profile" {
+  description = "MC Server IAM Instance Profile Name"
   type        = string
 }
 
-variable "api_server_role_name" {
-  description = "API Server IAM Role Name"
+variable "api_server_instance_profile" {
+  description = "API Server IAM Instance Profile Name"
   type        = string
 }
 
-variable "web_server_role_name" {
-  description = "Web Server IAM Role Name"
+variable "web_server_instance_profile" {
+  description = "Web Server IAM Instance Profile Name"
   type        = string
 }
 
-variable "jump_server_role_name" {
-  description = "Jump Server IAM Role Name"
+variable "jump_server_instance_profile" {
+  description = "Jump Server IAM Instance Profile Name"
   type        = string
 }
 

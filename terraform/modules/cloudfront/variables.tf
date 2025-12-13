@@ -6,7 +6,13 @@ variable "environment" {
 }
 
 variable "web_server_public_ip" {
-  description = "Web Server Public IP address"
+  description = "Web Server Public IP address (deprecated, use public_dns)"
+  type        = string
+  default     = ""
+}
+
+variable "web_server_public_dns" {
+  description = "Web Server Public DNS name"
   type        = string
 }
 

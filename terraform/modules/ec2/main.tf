@@ -38,7 +38,7 @@ resource "aws_instance" "mc_server" {
   vpc_security_group_ids      = [var.mc_server_sg_id]
   associate_public_ip_address = true
   
-  iam_instance_profile = var.mc_server_role_name
+  iam_instance_profile = var.mc_server_instance_profile
   key_name            = var.ec2_key_pair_name
 
   # User Data for Route53 update and Docker setup
@@ -94,7 +94,7 @@ resource "aws_spot_instance_request" "api_server" {
   vpc_security_group_ids      = [var.api_server_sg_id]
   associate_public_ip_address = false  # Private subnet
   
-  iam_instance_profile = var.api_server_role_name
+  iam_instance_profile = var.api_server_instance_profile
   key_name            = var.ec2_key_pair_name
 
   # User Data for Docker and Redis setup
@@ -132,7 +132,7 @@ resource "aws_spot_instance_request" "web_server" {
   vpc_security_group_ids      = [var.web_server_sg_id]
   associate_public_ip_address = true  # CloudFront origin
   
-  iam_instance_profile = var.web_server_role_name
+  iam_instance_profile = var.web_server_instance_profile
   key_name            = var.ec2_key_pair_name
 
   # User Data for Docker setup
@@ -169,7 +169,7 @@ resource "aws_instance" "jump_server" {
   vpc_security_group_ids      = [var.jump_server_sg_id]
   associate_public_ip_address = false  # Private subnet
   
-  iam_instance_profile = var.jump_server_role_name
+  iam_instance_profile = var.jump_server_instance_profile
   key_name            = var.ec2_key_pair_name
 
   # User Data for PostgreSQL/MySQL client setup

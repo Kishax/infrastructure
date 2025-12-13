@@ -4,7 +4,11 @@ KishaX の統合インフラストラクチャプロジェクト
 
 ## Architecture
 
-<img width="3080" height="3560" alt="インフラアーキテクチャ" src="https://github.com/user-attachments/assets/bb79d050-c257-4731-bc11-1f2a8d1530e5" />
+### ミドルレベルのインフラ(現環境)
+![現インフラ図](assets/new-infrastructure.png)
+
+### 企業レベルのインフラ(旧環境)
+![旧インフラ図](assets/old-infrastructure.png)
 
 ## Tree
 

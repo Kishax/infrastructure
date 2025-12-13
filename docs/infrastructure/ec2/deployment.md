@@ -127,7 +127,6 @@ export RDS_MYSQL_ENDPOINT=$(terraform output -raw mysql_endpoint)
 export TO_WEB_QUEUE_URL=$(terraform output -raw to_web_queue_url)
 export TO_MC_QUEUE_URL=$(terraform output -raw to_mc_queue_url)
 export TO_DISCORD_QUEUE_URL=$(terraform output -raw discord_queue_url)
-export API_SERVER_PRIVATE_IP=$(terraform output -raw api_server_private_ip)
 ```
 
 ### 2. 機密情報の取得
@@ -601,7 +600,7 @@ TO_MC_QUEUE_URL=${TO_MC_QUEUE_URL}
 TO_DISCORD_QUEUE_URL=${TO_DISCORD_QUEUE_URL}
 
 # Redis Configuration (i-b上のRedis #2)
-REDIS_URL=redis://${API_SERVER_PRIVATE_IP}:6380
+REDIS_URL=redis://${INSTANCE_ID_B_PRIVATE_IP}:6380
 REDIS_CONNECTION_TIMEOUT=5000
 REDIS_COMMAND_TIMEOUT=3000
 
@@ -683,7 +682,7 @@ docker compose -f compose.yaml logs -f
 curl http://localhost:80
 
 # i-b上のRedisへの接続確認
-redis-cli -h $API_SERVER_PRIVATE_IP -p 6380 ping
+redis-cli -h $INSTANCE_ID_B_PRIVATE_IP -p 6380 ping
 
 # コンテナログ確認
 docker logs kishax-web
@@ -766,7 +765,7 @@ TO_MC_QUEUE_URL=${TO_MC_QUEUE_URL}
 TO_DISCORD_QUEUE_URL=${TO_DISCORD_QUEUE_URL}
 
 # Redis Configuration (i-b上のRedis #1)
-REDIS_HOST=${API_SERVER_PRIVATE_IP}
+REDIS_HOST=${INSTANCE_ID_B_PRIVATE_IP}
 REDIS_PORT=6379
 REDIS_CONNECTION_TIMEOUT=5000
 
@@ -781,7 +780,7 @@ MC_SIMULATION_DISTANCE=10
 
 # Authentication API Configuration
 # AUTH_API_KEYはi-bで生成した値と同じものを使用
-AUTH_API_URL=http://${API_SERVER_PRIVATE_IP}:8080
+AUTH_API_URL=http://${INSTANCE_ID_B_PRIVATE_IP}:8080
 AUTH_API_KEY=COPY_FROM_I_B_AUTH_API_KEY
 
 # Logging Configuration
@@ -844,7 +843,7 @@ docker logs kishax-minecraft-server
 sudo netstat -tlnp | grep 25565
 
 # i-b上のRedisへの接続確認
-redis-cli -h $API_SERVER_PRIVATE_IP -p 6379 ping
+redis-cli -h $INSTANCE_ID_B_PRIVATE_IP -p 6379 ping
 
 # DNS確認（別ターミナルから）
 # dig mc.kishax.net

@@ -1,0 +1,121 @@
+graph TB
+    subgraph Internet["🌐 Internet"]
+        Users[Users/Players]
+        MCPlayers[Minecraft Players]
+    end
+
+    subgraph AWS["☁️ AWS Cloud - ap-northeast-1"]
+        subgraph Route53["Route53"]
+            R53MC[mc.kishax.net<br/>A Record]
+            R53Web[kishax.net<br/>Alias Record]
+        end
+
+        subgraph CloudFront["CloudFront"]
+            CF[Distribution<br/>E3J0************]
+        end
+
+        subgraph VPC["VPC - 10.0.0.0/16"]
+            subgraph PublicSubnets["Public Subnets (2 AZs)"]
+                subgraph AZ1Public["AZ-1a Public<br/>subnet-066*****"]
+                    EIP[Elastic IP<br/>57.180.***.***]
+                    EC2A[i-a: MC Server<br/>t3.large On-Demand<br/>i-05d37*****<br/>Docker + VM]
+                    EC2C[i-c: Web + Discord<br/>t2.micro Spot<br/>i-0c179*****<br/>35.77.***.***]
+                end
+            end
+
+            subgraph PrivateSubnets["Private Subnets (2 AZs)"]
+                subgraph AZ1Private["AZ-1a Private<br/>subnet-058*****"]
+                    EC2B[i-b: API + Redis<br/>t3.small Spot<br/>i-07056*****<br/>10.0.36.61]
+                    EC2D[i-d: Jump Server<br/>t2.micro On-Demand<br/>i-08b0e*****]
+                end
+                
+                subgraph AZ1cPrivate["AZ-1c Private<br/>subnet-0a4*****"]
+                    RDSPostgres[(RDS PostgreSQL<br/>db.t4g.micro<br/>db-JNU*****)]
+                    RDSMySQL[(RDS MySQL<br/>db.t4g.micro<br/>db-JNU*****)]
+                end
+            end
+
+            IGW[Internet Gateway]
+        end
+
+        subgraph SQS["Amazon SQS"]
+            SQSDiscord[Discord Queue<br/>kishax-production-discord-queue]
+            SQSToMC[To MC Queue<br/>kishax-production-to-mc-queue]
+            SQSToWeb[To Web Queue<br/>kishax-production-to-web-queue]
+        end
+
+        subgraph IAM["IAM"]
+            IAMRoles[4 IAM Roles<br/>+ Instance Profiles]
+        end
+
+        subgraph SSM["Systems Manager"]
+            SSMParams[Parameter Store<br/>SQS Credentials]
+        end
+    end
+
+    %% External connections
+    MCPlayers -->|TCP 25565| R53MC
+    Users -->|HTTPS| R53Web
+    
+    %% Route53 connections
+    R53MC -->|Dynamic IP Update<br/>via User Data| EIP
+    R53Web -->|Alias| CF
+    
+    %% CloudFront connection
+    CF -->|HTTP Origin| EC2C
+    
+    %% EIP connection
+    EIP -.->|Associated| EC2A
+    
+    %% Internet Gateway connections
+    IGW -->|Public Access| EC2A
+    IGW -->|Public Access| EC2C
+    
+    %% EC2 internal communications (HTTP)
+    EC2A <-->|HTTP API| EC2B
+    EC2C <-->|HTTP API| EC2B
+    EC2A -.->|Time-based<br/>22:00-27:00| EC2C
+    
+    %% Database connections
+    EC2A -->|MySQL 3306| RDSMySQL
+    EC2B -->|PostgreSQL 5432| RDSPostgres
+    EC2C -->|PostgreSQL 5432| RDSPostgres
+    
+    %% SQS connections
+    EC2A <-->|Messages| SQSToMC
+    EC2B <-->|Messages| SQSDiscord
+    EC2B <-->|Messages| SQSToWeb
+    EC2C <-->|Messages| SQSDiscord
+    
+    %% Redis on EC2
+    EC2B -->|Local Redis<br/>Port 6379| EC2B
+    
+    %% Jump Server access
+    EC2D -.->|DB Admin<br/>SSM Session| RDSPostgres
+    EC2D -.->|DB Admin<br/>SSM Session| RDSMySQL
+    
+    %% IAM associations
+    IAMRoles -.->|Assume Role| EC2A
+    IAMRoles -.->|Assume Role| EC2B
+    IAMRoles -.->|Assume Role| EC2C
+    IAMRoles -.->|Assume Role| EC2D
+    
+    %% SSM Parameter access
+    EC2B -.->|Read Credentials| SSMParams
+    EC2C -.->|Read Credentials| SSMParams
+
+    classDef internet fill:#e1f5ff,stroke:#0078d4,stroke-width:3px
+    classDef cloudfront fill:#ffeaa7,stroke:#fdcb6e,stroke-width:3px
+    classDef ec2 fill:#a8e6cf,stroke:#56ab2f,stroke-width:3px
+    classDef rds fill:#ffcccc,stroke:#ff6b6b,stroke-width:3px
+    classDef sqs fill:#dfe6e9,stroke:#636e72,stroke-width:3px
+    classDef route53 fill:#ffeaa7,stroke:#fdcb6e,stroke-width:3px
+    classDef iam fill:#c7ecee,stroke:#079992,stroke-width:3px
+    
+    class Users,MCPlayers internet
+    class CF cloudfront
+    class EC2A,EC2B,EC2C,EC2D ec2
+    class RDSPostgres,RDSMySQL rds
+    class SQSDiscord,SQSToMC,SQSToWeb sqs
+    class R53MC,R53Web route53
+    class IAMRoles,SSMParams iam

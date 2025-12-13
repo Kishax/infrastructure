@@ -283,25 +283,20 @@ Terraform適用時に以下が自動的に作成されます：
 
 **SQS認証情報の取得**（`.env`ファイル生成時に使用）：
 ```bash
+cd /Users/tk/git/Kishax/infrastructure/terraform
+
 # SQS Access Key IDを取得
-export MC_WEB_SQS_ACCESS_KEY_ID=$(aws ssm get-parameter \
-  --profile AdministratorAccess-126112056177 \
-  --name "/kishax/production/sqs/access-key-id" \
-  --query "Parameter.Value" \
-  --output text)
+export MC_WEB_SQS_ACCESS_KEY_ID=$(terraform output -raw sqs_access_key_id)
 
 # SQS Secret Access Keyを取得
-export MC_WEB_SQS_SECRET_ACCESS_KEY=$(aws ssm get-parameter \
-  --profile AdministratorAccess-126112056177 \
-  --name "/kishax/production/sqs/secret-access-key" \
-  --with-decryption \
-  --query "Parameter.Value" \
-  --output text)
+export MC_WEB_SQS_SECRET_ACCESS_KEY=$(terraform output -raw sqs_secret_access_key)
 
 # 確認
 echo "Access Key ID: $MC_WEB_SQS_ACCESS_KEY_ID"
 echo "Secret Access Key: ${MC_WEB_SQS_SECRET_ACCESS_KEY:0:10}..." # 最初の10文字のみ表示
 ```
+
+> **重要**: `terraform output`を使用することで、KMS復号化された実際の認証情報を取得できます。SSM Parameter Storeから直接取得すると暗号化されたままの値が返される場合があります。
 
 > **Note**: 旧環境でSQS用のIAMユーザーがある場合は、事前に削除してください：
 > ```bash

@@ -359,6 +359,55 @@ aws ssm start-session \
 ssh -i /Users/tk/git/Kishax/infrastructure/minecraft.pem -p 2222 ec2-user@localhost
 ```
 
+**トラブルシューティング（Permission denied エラー）**:
+
+1. **キーペア名を確認**:
+   ```bash
+   # EC2に登録されているキーペア名を確認
+   aws ec2 describe-instances \
+     --instance-ids $INSTANCE_ID_B \
+     --profile AdministratorAccess-126112056177 \
+     --query 'Reservations[0].Instances[0].KeyName' \
+     --output text
+   # → "minecraft" が返ってくるはず
+   ```
+
+2. **PEMファイルの権限確認**:
+   ```bash
+   ls -la /Users/tk/git/Kishax/infrastructure/minecraft.pem
+   # → -rw------- (600) であることを確認
+   
+   # 権限がおかしい場合
+   chmod 600 /Users/tk/git/Kishax/infrastructure/minecraft.pem
+   ```
+
+3. **Port Forwardingが正常動作しているか確認**:
+   ```bash
+   # localhost:2222 がリッスンしているか確認
+   lsof -i :2222
+   # または
+   netstat -an | grep 2222
+   ```
+
+4. **SSH詳細ログで原因特定**:
+   ```bash
+   ssh -vvv -i /Users/tk/git/Kishax/infrastructure/minecraft.pem -p 2222 ec2-user@localhost
+   # "Offering public key" と "Authentications that can continue" の部分を確認
+   ```
+
+5. **別のローカルポートで試す**:
+   ```bash
+   # ターミナル1: 別のポート（2223）で試す
+   aws ssm start-session \
+     --profile AdministratorAccess-126112056177 \
+     --target $INSTANCE_ID_D \
+     --document-name AWS-StartPortForwardingSessionToRemoteHost \
+     --parameters "{\"host\":[\"${INSTANCE_ID_B_PRIVATE_IP}\"],\"portNumber\":[\"22\"],\"localPortNumber\":[\"2223\"]}"
+   
+   # ターミナル2
+   ssh -i /Users/tk/git/Kishax/infrastructure/minecraft.pem -p 2223 ec2-user@localhost
+   ```
+
 #### i-c (Web Server)への接続
 
 ```bash

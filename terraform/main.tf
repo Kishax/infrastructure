@@ -127,6 +127,9 @@ module "ec2" {
   # Route53
   route53_zone_id           = var.route53_zone_id
   mc_domain_name            = var.mc_domain_name
+  
+  # EC2 Key Pair
+  ec2_key_pair_name         = var.ec2_key_pair_name
 }
 
 # CloudFront Module

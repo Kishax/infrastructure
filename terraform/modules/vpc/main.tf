@@ -87,3 +87,22 @@ resource "aws_route_table_association" "private" {
 data "aws_availability_zones" "available" {
   state = "available"
 }
+
+# S3 VPC Gateway Endpoint (FREE!)
+resource "aws_vpc_endpoint" "s3" {
+  vpc_id       = aws_vpc.main.id
+  service_name = "com.amazonaws.${var.aws_region}.s3"
+  
+  vpc_endpoint_type = "Gateway"
+  
+  route_table_ids = [
+    aws_route_table.public.id,
+    aws_route_table.private.id
+  ]
+
+  tags = {
+    Name        = "kishax-${var.environment}-s3-endpoint"
+    Environment = var.environment
+    Purpose     = "S3 access for Docker images"
+  }
+}

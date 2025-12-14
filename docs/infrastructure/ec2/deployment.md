@@ -1048,6 +1048,10 @@ EMAIL_USER=YOUR_SMTP_USER
 EMAIL_PASS=YOUR_SMTP_PASSWORD
 EMAIL_FROM=noreply@kishax.net
 
+# Internal API Key (for server-to-server communication)
+# Web Server内部からのAPI呼び出し認証用
+INTERNAL_API_KEY=$(openssl rand -hex 32)
+
 # Application Configuration
 NODE_ENV=production
 PORT=80
@@ -1057,7 +1061,7 @@ LOG_LEVEL=info
 EOF
 
 # .envファイルを編集して実際の値に置き換え
-# 1. YOUR_POSTGRES_PASSWORD_HERE を terraform.tfvars の postgres_password の値に置き換え
+# 1. YOUR_POSTGRES_PASSWORD_HERE を terraform.tfvars の postgres_password の値に置き換え（$記号は%24にURLエンコード）
 # 2. YOUR_GOOGLE_* を Google Cloud Console から取得した値に置き換え
 # 3. YOUR_DISCORD_* を Discord Developer Portal から取得した値に置き換え
 # 4. YOUR_TWITTER_* を Twitter Developer Portal から取得した値に置き換え
@@ -1075,12 +1079,18 @@ cat .env
 ```
 
 > **重要**: 
-> - `YOUR_POSTGRES_PASSWORD_HERE`: `terraform.tfvars` の `postgres_password` の値を使用
+> - `YOUR_POSTGRES_PASSWORD_HERE`: `terraform.tfvars` の `postgres_password` の値を使用（`$`記号は`%24`にURLエンコード）
 > - `NEXTAUTH_SECRET`: 自動生成される（`openssl rand -base64 32`）
+> - `INTERNAL_API_KEY`: 自動生成される（`openssl rand -hex 32`）- Web Server内部通信の認証に使用
 > - OAuth Client ID/Secret: 各プロバイダーのDeveloper Consoleから取得
 > - SMTP設定: 使用するメールプロバイダーの設定を使用
 
 ### 2-5. アプリケーションビルドとデプロイ
+
+#### 🔹 方法1: i-c (EC2) 上で直接ビルド
+
+> **⚠️ 注意**: t2.microでは Next.js 16 のビルド時にメモリ不足でクラッシュする可能性があります。
+> その場合は「方法2: ローカルビルド → イメージ転送」を使用してください。
 
 ```bash
 cd /opt/web
@@ -1095,6 +1105,115 @@ docker compose -f compose.yaml up -d
 docker compose -f compose.yaml ps
 docker compose -f compose.yaml logs -f
 ```
+
+#### 🔹 方法2: ローカルビルド → S3経由でイメージ転送（推奨）
+
+t2.microではメモリ不足でビルドが失敗する場合、ローカルでビルドしてS3経由でイメージを転送します。
+SSH/SCP転送よりも**圧倒的に高速**です。
+
+##### ステップ1: ローカルでDockerイメージをビルド
+
+```bash
+# ローカルマシン（Macbook）で実行
+cd /Users/tk/git/Kishax/infrastructure/apps/web
+
+# 現在のブランチを確認（infra/migrate-to-ec2）
+git branch
+
+# ⚠️ 重要: Mac (ARM64) からx86_64 EC2用にビルド
+# --platform linux/amd64 を必ず指定
+docker build --platform linux/amd64 -t kishax-web:latest .
+
+# アーキテクチャ確認（"Architecture": "amd64"であることを確認）
+docker inspect kishax-web:latest | grep Architecture
+```
+
+> **⚠️ アーキテクチャの注意**:
+> - Mac (Apple Silicon/M1/M2) は ARM64 アーキテクチャ
+> - EC2 (t2.micro) は x86_64 アーキテクチャ
+> - `--platform linux/amd64` を指定しないと、ARM64イメージが作成され、EC2で動作しません
+> - ビルド時間は通常の2-3倍かかる場合があります（エミュレーション実行のため）
+
+##### ステップ2: DockerイメージをS3にアップロード
+
+```bash
+# ローカルマシンで実行
+
+# S3バケット名を取得
+cd /Users/tk/git/Kishax/infrastructure/terraform
+export S3_BUCKET=$(terraform output -raw s3_docker_images_bucket_name)
+echo "S3 Bucket: $S3_BUCKET"
+
+# イメージをtar.gz形式で保存
+cd /Users/tk/git/Kishax/infrastructure/apps/web
+docker save kishax-web:latest | gzip > kishax-web-latest.tar.gz
+
+# ファイルサイズ確認（約500MB-1GB程度）
+ls -lh kishax-web-latest.tar.gz
+
+# S3にアップロード（VPC Endpoint経由で高速転送）
+aws s3 cp kishax-web-latest.tar.gz \
+  s3://${S3_BUCKET}/web/kishax-web-latest.tar.gz \
+  --profile AdministratorAccess-126112056177
+
+# アップロード確認
+aws s3 ls s3://${S3_BUCKET}/web/ \
+  --profile AdministratorAccess-126112056177
+
+# 転送完了後、ローカルのイメージファイルを削除（ディスク節約）
+rm kishax-web-latest.tar.gz
+```
+
+> **💡 Tip**:
+> - S3へのアップロード時間は約30秒〜2分程度（ネットワーク速度による）
+> - SSH/SCP転送（5-10分）よりも高速
+> - S3からEC2へのダウンロードもVPC Endpoint経由で高速（無料）
+
+##### ステップ3: i-cでS3からイメージをダウンロードして起動
+
+```bash
+# i-c (Web Server) 上で実行
+
+# S3バケット名を環境変数に設定（terraform outputから取得）
+cd /opt/terraform  # または terraform がある場所
+export S3_BUCKET=$(terraform output -raw s3_docker_images_bucket_name 2>/dev/null || echo "kishax-production-docker-images")
+
+# S3からイメージをダウンロード
+aws s3 cp s3://${S3_BUCKET}/web/kishax-web-latest.tar.gz \
+  /home/ec2-user/kishax-web-latest.tar.gz
+
+# ダウンロード確認
+ls -lh ~/kishax-web-latest.tar.gz
+
+# Dockerイメージをロード
+docker load < ~/kishax-web-latest.tar.gz
+
+# ロード確認
+docker images | grep kishax-web
+
+# イメージファイルを削除（ディスク節約）
+rm ~/kishax-web-latest.tar.gz
+
+# /opt/web に移動
+cd /opt/web
+
+# compose.yamlを確認（image名が一致していることを確認）
+cat compose.yaml
+
+# サービス起動（ビルドなしで直接起動）
+docker compose -f compose.yaml up -d
+
+# 起動確認
+docker compose -f compose.yaml ps
+docker compose -f compose.yaml logs -f
+```
+
+> **💡 Tip**: 
+> - イメージ転送は初回のみ必要です
+> - 以降のアップデートも同じ手順で行えます
+> - S3経由の転送時間は約1-3分程度です（SSH転送の5-10分と比較して高速）
+> - **ARM64 Macからビルドする場合は必ず `--platform linux/amd64` を指定してください**
+> - S3バケットには30日間のライフサイクルポリシーが設定されており、古いイメージは自動削除されます
 
 ### 2-6. 動作確認
 

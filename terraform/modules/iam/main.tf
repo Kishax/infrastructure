@@ -76,6 +76,30 @@ resource "aws_iam_role_policy_attachment" "mc_server_ssm_session" {
   policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
 }
 
+# MC Server Policy - S3 Access (Docker Images)
+resource "aws_iam_role_policy" "mc_server_s3" {
+  name = "kishax-${var.environment}-mc-s3-policy"
+  role = aws_iam_role.mc_server.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:GetObject",
+          "s3:PutObject",
+          "s3:ListBucket"
+        ]
+        Resource = [
+          var.s3_docker_images_bucket_arn,
+          "${var.s3_docker_images_bucket_arn}/*"
+        ]
+      }
+    ]
+  })
+}
+
 # MC Server Instance Profile
 resource "aws_iam_instance_profile" "mc_server" {
   name = "kishax-${var.environment}-mc-server-profile"
@@ -154,6 +178,30 @@ resource "aws_iam_role_policy_attachment" "api_server_ssm_session" {
   policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
 }
 
+# API Server Policy - S3 Access (Docker Images)
+resource "aws_iam_role_policy" "api_server_s3" {
+  name = "kishax-${var.environment}-api-s3-policy"
+  role = aws_iam_role.api_server.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:GetObject",
+          "s3:PutObject",
+          "s3:ListBucket"
+        ]
+        Resource = [
+          var.s3_docker_images_bucket_arn,
+          "${var.s3_docker_images_bucket_arn}/*"
+        ]
+      }
+    ]
+  })
+}
+
 # API Server Instance Profile
 resource "aws_iam_instance_profile" "api_server" {
   name = "kishax-${var.environment}-api-server-profile"
@@ -230,6 +278,30 @@ resource "aws_iam_role_policy" "web_server_ssm" {
 resource "aws_iam_role_policy_attachment" "web_server_ssm_session" {
   role       = aws_iam_role.web_server.name
   policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+}
+
+# Web Server Policy - S3 Access (Docker Images)
+resource "aws_iam_role_policy" "web_server_s3" {
+  name = "kishax-${var.environment}-web-s3-policy"
+  role = aws_iam_role.web_server.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:GetObject",
+          "s3:PutObject",
+          "s3:ListBucket"
+        ]
+        Resource = [
+          var.s3_docker_images_bucket_arn,
+          "${var.s3_docker_images_bucket_arn}/*"
+        ]
+      }
+    ]
+  })
 }
 
 # Web Server Instance Profile

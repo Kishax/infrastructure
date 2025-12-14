@@ -126,3 +126,19 @@ output "sqs_secret_access_key" {
   value       = module.iam.sqs_secret_access_key
   sensitive   = true
 }
+
+# S3 Outputs
+output "s3_docker_images_bucket_name" {
+  description = "S3 bucket name for Docker images"
+  value       = module.s3.bucket_name
+}
+
+output "s3_docker_images_bucket_arn" {
+  description = "S3 bucket ARN for Docker images"
+  value       = module.s3.bucket_arn
+}
+
+output "s3_vpc_endpoint_id" {
+  description = "S3 VPC Endpoint ID"
+  value       = module.vpc.s3_vpc_endpoint_id
+}

@@ -14,3 +14,8 @@ variable "mc_domain_name" {
   description = "Minecraft server domain name"
   type        = string
 }
+
+variable "s3_docker_images_bucket_arn" {
+  description = "S3 bucket ARN for Docker images"
+  type        = string
+}

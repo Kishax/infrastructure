@@ -44,6 +44,7 @@ module "vpc" {
   
   environment = var.environment
   vpc_cidr    = var.vpc_cidr
+  aws_region  = var.aws_region
 }
 
 # Security Groups Module
@@ -54,13 +55,23 @@ module "security_groups" {
   vpc_id      = module.vpc.vpc_id
 }
 
+# S3 Module (Docker Images Storage)
+module "s3" {
+  source = "./modules/s3"
+  
+  environment                = var.environment
+  vpc_id                     = module.vpc.vpc_id
+  ec2_instance_role_arns     = module.iam.all_ec2_role_arns
+}
+
 # IAM Module
 module "iam" {
   source = "./modules/iam"
   
-  environment        = var.environment
-  route53_zone_id    = var.route53_zone_id
-  mc_domain_name     = var.mc_domain_name
+  environment                 = var.environment
+  route53_zone_id             = var.route53_zone_id
+  mc_domain_name              = var.mc_domain_name
+  s3_docker_images_bucket_arn = module.s3.bucket_arn
 }
 
 # RDS Module

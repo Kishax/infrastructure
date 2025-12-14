@@ -67,3 +67,14 @@ output "sqs_secret_access_key_ssm_parameter" {
   description = "SSM Parameter name for SQS Secret Access Key"
   value       = aws_ssm_parameter.sqs_secret_access_key.name
 }
+
+# EC2 Instance Role ARNs (for S3 bucket policy)
+output "all_ec2_role_arns" {
+  description = "List of all EC2 instance role ARNs"
+  value = [
+    aws_iam_role.mc_server.arn,
+    aws_iam_role.api_server.arn,
+    aws_iam_role.web_server.arn,
+    aws_iam_role.jump_server.arn
+  ]
+}

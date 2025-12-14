@@ -3,6 +3,9 @@ tfplan
 .env
 .env.backup
 .env.backup.new
+.env.api
+.env.mc
+.env.web
 .bak/*
 jdt.ls-java-project/
 *~

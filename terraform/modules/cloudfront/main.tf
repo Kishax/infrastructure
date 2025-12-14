@@ -5,7 +5,7 @@ resource "aws_cloudfront_distribution" "web" {
   enabled             = true
   is_ipv6_enabled     = true
   comment             = "Kishax Web Application Distribution"
-  default_root_object = "index.html"
+  # default_root_object を削除（Next.jsは自身でルーティングを処理）
   price_class         = "PriceClass_200"  # Asia, Europe, US (exclude South America, Australia)
 
   aliases = [var.web_domain_name]

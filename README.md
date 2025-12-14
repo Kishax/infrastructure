@@ -5,10 +5,10 @@ KishaX の統合インフラストラクチャプロジェクト
 ## Architecture
 
 ### ミドルレベルのインフラ(現環境)
-![現インフラ図](assets/new-infrastructure.png)
+![現インフラ図](assets/202512/1-infrastructure.png)
 
 ### 企業レベルのインフラ(旧環境)
-![旧インフラ図](assets/old-infrastructure.png)
+![旧インフラ図](assets/202506/1-infrastructure.png)
 
 ## Tree
 

@@ -830,7 +830,7 @@ cat > .env << EOF
 
 # Database Configuration (RDS PostgreSQL)
 # terraform.tfvarsのpostgres_passwordを使用
-DATABASE_URL=jdbc:postgresql://${RDS_POSTGRES_ENDPOINT}:5432/kishax?user=postgres&password=YOUR_POSTGRES_PASSWORD_HERE
+DATABASE_URL=jdbc:postgresql://${RDS_POSTGRES_ENDPOINT}/kishax?user=postgres&password=YOUR_POSTGRES_PASSWORD_HERE
 
 # AWS SQS Configuration
 AWS_REGION=ap-northeast-1
@@ -994,7 +994,7 @@ sudo chown ec2-user:ec2-user /opt/web
 cd /opt/web
 
 # Gitリポジトリクローン
-git clone https://github.com/Kishax/web.git .
+git clone https://github.com/Kishax/kishax-web.git .
 ```
 
 ### 2-4. 環境変数ファイル生成
@@ -1010,7 +1010,7 @@ cat > .env << EOF
 
 # Database Configuration (RDS PostgreSQL)
 # terraform.tfvarsのpostgres_passwordを使用
-DATABASE_URL=postgresql://postgres:YOUR_POSTGRES_PASSWORD_HERE@${RDS_POSTGRES_ENDPOINT}:5432/kishax
+DATABASE_URL=postgresql://postgres:YOUR_POSTGRES_PASSWORD_HERE@${RDS_POSTGRES_ENDPOINT}/kishax
 
 # AWS SQS Configuration
 AWS_REGION=ap-northeast-1

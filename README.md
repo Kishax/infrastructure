@@ -4,167 +4,260 @@ KishaX の統合インフラストラクチャプロジェクト
 
 ## Architecture
 
-### ミドルレベルのインフラ(現環境)
-![現インフラ図](assets/202512/1-infrastructure.png)
+### 最新インフラ構成 (EC2ベース - 2025/12更新)
+![最新インフラ図](assets/202512/2-infrastructure.png)
 
-### 企業レベルのインフラ(旧環境)
-![旧インフラ図](assets/202506/1-infrastructure.png)
+### 前世代インフラ構成 (EC2移行前)
+![旧インフラ図](assets/202512/1-infrastructure.png)
 
-## Tree
+### レガシー環境 (ECS/Fargate)
+![レガシーインフラ図](assets/202506/1-infrastructure.png)
+
+## 📋 Project Structure
 
 ```
 kishax/
-├── apps/                   # アプリケーション層
-│   ├── api/               # 共通APIライブラリ (Java)
-│   ├── auth/              # カスタムIdP認証サービス (Keycloak/ECS)
-│   ├── discord/           # Discord Bot (ECS)
-│   ├── mc/                # Minecraft プラグイン (Velocity + Spigot)
-│   └── web/               # Web アプリケーション (ECS)
-└── aws/                   # AWS共通リソース・ポリシー
+├── apps/                   # アプリケーション層 (Git Submodules)
+│   ├── api/               # 共通APIサーバー (Java + Spring Boot)
+│   │   ├── compose.yaml   # Redis + SQS Bridge + API + Discord Bot
+│   │   └── Dockerfile*    # 各サービス用Dockerfile
+│   ├── mc/                # Minecraft Server (Velocity + Spigot)
+│   │   ├── compose.yml    # MC Server + MySQL
+│   │   ├── Dockerfile     # Multi-stage build
+│   │   └── docker/
+│   │       ├── config/servers.json        # サーバー構成定義
+│   │       ├── database/                  # DB関連
+│   │       ├── scripts/                   # 起動・管理スクリプト
+│   │       └── templates/                 # 設定テンプレート
+│   └── web/               # Web アプリケーション (Next.js 16)
+│       ├── compose.yaml   # Next.js App
+│       └── Dockerfile     # Standalone build
+│
+├── terraform/             # Infrastructure as Code
+│   ├── main.tf           # メイン構成
+│   ├── modules/          # 再利用可能モジュール
+│   │   ├── vpc/          # VPC, Subnets, IGW, S3 Endpoint
+│   │   ├── ec2/          # 4 EC2 Instances
+│   │   ├── rds/          # PostgreSQL + MySQL
+│   │   ├── sqs/          # 3 Queues + DLQs
+│   │   ├── s3/           # Docker Images bucket
+│   │   ├── cloudfront/   # CDN
+│   │   ├── route53/      # DNS
+│   │   ├── iam/          # Roles + Policies
+│   │   └── security_groups/ # Security Groups
+│   └── terraform.tfvars  # 環境変数
+│
+└── docs/infrastructure/ec2/  # ドキュメント
+    ├── deployment.md         # デプロイメントガイド
+    ├── architecture.md       # アーキテクチャ詳細
+    ├── mc-requirements.md    # MC Server要件
+    └── next-challenge.md     # 今後の改善案
 ```
-## Services
 
-このプロジェクトは5つの主要アプリケーションとAWSインフラから構成されています：
+## 🏗️ Infrastructure Overview
 
-- **Auth Service (Keycloak)**: カスタムIdP によるAWS コンソールSSO認証 (Keycloak/ECS)
-- **Discord Bot**: MinecraftイベントのDiscord通知 (Java/ECS)
-- **Minecraft Plugins**: Velocity/Spigotプラグイン (Java)
-- **Web Application**: プレイヤー認証・管理 (Next.js/ECS)
+### EC2 Instances (4台構成)
 
-## 開発者向けAWSアクセス
+| Instance | Type | Role | Subnet | Cost Optimization |
+|----------|------|------|--------|-------------------|
+| **i-a** | t3.large On-Demand | MC Server | Public | 24/7運用 |
+| **i-b** | t3.small Spot | API + Redis | **Public** | NAT不要で¥5,000削減 |
+| **i-c** | t2.micro Spot | Web Server | Public | ✅ Deployed |
+| **i-d** | t2.micro On-Demand | Jump Server | Public | 必要時のみ起動 |
 
-### カスタムIdP (apps/auth) による統合認証
+**コスト最適化の判断**:
+- i-b を Public に配置することで **NAT Gateway (¥5,000/月)** を削減
+- Discord API, Docker Hub へのアクセスのためインターネット接続が必要
+- 目標月額: **¥5,000-6,000** 達成
 
-開発メンバーは **Keycloak ベースのカスタムIdP** を通じてAWSコンソールにアクセスします：
+### Databases (RDS)
 
-**認証フロー**:
+| Database | Engine | Instance | Purpose |
+|----------|--------|----------|---------|
+| PostgreSQL | v16.6 | db.t4g.micro | Web + API + Discord Bot |
+| MySQL | v8.0.40 | db.t4g.micro | Minecraft Server |
+
+### Storage
+
+| Service | Bucket/Table | Purpose |
+|---------|--------------|---------|
+| S3 | kishax-prod-docker-images | Docker Image保存 (30日ライフサイクル) |
+| S3 | kishax-terraform-state | Terraform状態管理 |
+| DynamoDB | kishax-terraform-locks | Terraform State Lock |
+
+### Messaging & Queues
+
+| Queue | Purpose | Connected Services |
+|-------|---------|-------------------|
+| to-mc-queue | Web → MC通信 | i-a, i-c |
+| to-web-queue | MC → Web通信 | i-a, i-c |
+| discord-queue | Discord通知 | i-a, i-b, i-c |
+
+**SQS認証**: IAM Userのアクセスキー（SSM Parameter Storeに保管）
+
+### Content Delivery
+
+- **CloudFront**: kishax.net (HTTPS)
+  - Origin: i-c (Port 80)
+  - ACM証明書: *.kishax.net
+  - キャッシュ最適化
+
+## 🎮 MC Server: servers.json管理システム
+
+### 特徴
+
+MC Serverは`apps/mc/docker/config/servers.json`による**完全自動化システム**を採用：
+
+1. **動的メモリ配分**: OVERALL_MEMORYから自動計算
+2. **複数Spigotサーバー対応**: memory_ratioで有効/無効
+3. **プラグインプリセット**: preset/customで柔軟に管理
+4. **自動設定生成**: velocity.toml, velocity-kishax-config.ymlを自動生成
+5. **DB自動登録**: statusテーブルにサーバー情報を自動登録
+
+### servers.json 構造
+
+```json
+{
+  "memory": { "overall": "8.0", "buffer": 0.1, "mc_wantage": 1.0 },
+  "plugin_presets": { "essential": [...], "full": [...] },
+  "proxies": [{ "name": "velocity-main", "memory_ratio": 0.1, ... }],
+  "spigots": [{ 
+    "name": "spigot-main", 
+    "memory_ratio": 0.9,
+    "is_home": true,
+    "minecraft_version": "1.21.8",
+    "kishax_spigot_jar": "Kishax-Spigot-1.21.8.jar",
+    ...
+  }],
+  "plugins": { ... }
+}
 ```
-GitHub OAuth → Keycloak (2FA必須) → AWS IAM Identity Center → AWS Console
+
+### メモリ計算式
+
+```
+MC全体メモリ (O-MC) = (OVERALL_MEMORY - Buffer) × mc_wantage
+各サーバーメモリ = O-MC × memory_ratio + (残りメモリ / サーバー数)
 ```
 
-**アクセス方法**:
-1. AWS IAM Identity Center のログインURLにアクセス
-2. Keycloak認証画面で GitHub OAuth または Email/Password を選択
-3. 2FA認証 (TOTP/Authenticator) を完了
-4. AWS Console に自動ログイン
+### 自動化スクリプト
 
-**サポート認証方式**:
-- **GitHub OAuth**: GitHubアカウントでのSSO認証
-- **Email/Password**: Keycloak ローカル認証 + 2FA
+| Script | Purpose |
+|--------|---------|
+| setup-directories.sh | テンプレートからディレクトリ生成 |
+| calculate-memory.sh | メモリ自動計算 |
+| generate-velocity-config.sh | Velocity設定自動生成 |
+| deploy-plugins.sh | プラグイン自動配置 |
+| register-servers-to-db.sh | statusテーブル自動登録 |
 
-**セキュリティ機能**:
-- 全認証方式で2FA (TOTP) 必須
-- SAML 2.0 による安全な連携
-- ブルートフォース攻撃保護
-- GitHub の永続ID を使用したアカウント統合
+## 🌐 Web Application (i-c) - ✅ Deployed
 
-## MC ↔ Web Communication System
+### Tech Stack
 
-### アーキテクチャ概要
+- **Framework**: Next.js 16 (App Router)
+- **Auth**: next-auth v5.0.0-beta.30
+- **Database**: Prisma + PostgreSQL
+- **Redis**: ioredis (i-b:6380)
 
-全ての通信は **kishax-api ライブラリ** に統合され、SQS + Redis Pub/Sub によるハイブリッド通信システムを実現しています。
+### Deployment
 
-### 通信フロー
+- **ビルド方法**: ローカルビルド (ARM64 Mac → x86_64 EC2)
+- **転送方法**: S3経由 (SSH転送は遅いため)
+- **実行**: Docker Compose (pre-built image)
+- **公開**: CloudFront経由 (HTTPS)
 
-**Web → MC (OTP認証・コマンド送信):**
-1. Web App → Redis Pub/Sub (`web_to_mc` チャンネル) でリアルタイム送信
-2. MC側 SqsWorker が Redis チャンネルを監視して即座に受信
-3. Velocity → Spigot にコマンド転送
+### 環境変数管理
 
-**MC → Web (レスポンス・イベント通知):**
-1. MC Plugins → SQS (`mc-to-web-queue-v2`) 経由で送信
-2. Web App が SQS をポーリングしてイベントを受信・処理
+- `SEED_ENV=production`: 本番環境でシード投入スキップ
+- `DATABASE_URL`: URL encoding必須 (`#` → `%23`, `$` → `%24`)
+- `REDIS_URL`: i-bのプライベートIP使用
+- `INTERNAL_API_KEY`: openssl生成の32 byte hex
 
-**MC → Discord (通知):**
-1. MC Plugins → API Gateway (`/discord`) → Lambda → SQS (`discord-queue-v2`)
-2. Discord Bot が SQS をポーリングして通知を送信
+## 🔐 Security
 
-### OTP認証フロー
+### IAM Roles (Least Privilege)
 
-1. **Web**: ユーザーがOTP認証リクエスト → Redis Pub/Sub で `web_mc_otp` メッセージ送信
-2. **MC**: SqsWorker が Redis チャンネルを監視して受信 → Velocity で OTP 表示
-3. **MC**: プレイヤーがOTP入力 → SQS経由で `mc_web_otp_response` を Web に送信
-4. **Web**: OTP検証完了 → 認証成功/失敗をレスポンス
+- **mc_server_role**: SQS, S3, CloudWatch, SSM
+- **api_server_role**: SQS, S3, CloudWatch, SSM
+- **web_server_role**: SQS, S3, CloudWatch, SSM
+- **jump_server_role**: SSM Session Manager
 
-### kishax-api 統合
+### Security Groups
 
-- **SqsWorker**: SQS + Redis Pub/Sub を統合したメッセージハンドラ
-- **QUEUE_MODE**: `WEB` または `MC` でメッセージ送受信方向を制御
-- **コールバック統合**: Java プラグインシステムとシームレス連携
+- **i-a**: 25565, 25577 (MC), 22 (SSH from Jump)
+- **i-b**: 8080 (API from i-a/i-c), 6379 (Redis from i-a), 6380 (Redis from i-c), 22 (SSH from Jump)
+- **i-c**: 80 (HTTP), 22 (SSH from Jump)
+- **i-d**: SSM only (no inbound)
 
-### メッセージタイプ
+### Access Methods
 
-**Web → MC:**
-- `web_mc_otp`: OTP認証要求
-- `web_mc_auth_confirm`: プレイヤー認証確認
-- `web_mc_teleport`: テレポートコマンド
-- `web_mc_server_switch`: サーバー切り替え
-- `web_mc_message`: メッセージ送信
+- **Jump Server経由**: SSM Session Manager + Port Forwarding
+- **RDS接続**: Jump Server経由のポートフォワーディング
+- **EC2アクセス**: Jump Server経由のSSHトンネル
 
-**MC → Web:**
-- `mc_web_otp_response`: OTP認証レスポンス
-- `mc_web_auth_response`: 認証レスポンス
-- `mc_web_player_status`: プレイヤーステータス変更
-- `mc_web_server_info`: サーバー情報更新
+## 🚀 Deployment
 
-### AWS リソース
+### Prerequisites
 
-**SQS キュー:**
-- `kishax-web-to-mc-queue-v2` + DLQ (Web→MC通信用)
-- `kishax-mc-to-web-queue-v2` + DLQ (MC→Web通信用) 
-- `kishax-discord-queue-v2` + DLQ (Discord Bot用)
-
-## QuickStart
-
-### First Setup
 ```bash
-make setup-first-time
-make setup-prerequisites
+# AWS SSO ログイン
+make login
+
+# Terraform初期化
+cd terraform
+terraform init
+terraform plan
+terraform apply
 ```
 
-### Deploy
-```bash
-# 全サービスデプロイ
-make deploy-all
+### デプロイ順序
 
-# 個別サービスデプロイ  
-make deploy-discord
-make deploy-web
+```
+1. i-b (API Server + Redis) ← 他が依存
+   ↓
+2. i-c (Web Server)         ← i-bのRedis/APIに依存 ✅
+   ↓
+3. i-a (MC Server)          ← i-bのRedis/APIに依存
 ```
 
-## Infrastructure Summary
+詳細は [`docs/infrastructure/ec2/deployment.md`](docs/infrastructure/ec2/deployment.md) を参照。
 
-### ECS Services (Fargate)
-- **API Service**: `kishax-api-service-v2` (256CPU/512MB)
-- **Auth Service**: `kishax-auth-service-v2` (512CPU/1024MB)
-- **Discord Bot**: `kishax-discord-bot-service-v2` (256CPU/512MB)
-- **Web App**: `kishax-web-service-v2` (1024CPU/2048MB)
+## 📊 Cost Estimate
 
-### Networking
-- **ALB**: `kishax-alb-v2` (Internet-facing)
-- **Target Group**: `kishax-web-tg-v2` (Health check: `/api/health`)
-- **Security Groups**: ECS用とALB用で分離
-- **SSL**: HTTPS強制リダイレクト対応
+| Resource | Spec | Monthly Cost (JPY) |
+|----------|------|--------------------|
+| i-a (MC) | t3.large On-Demand | ¥2,500 |
+| i-b (API) | t3.small Spot | ¥500 |
+| i-c (Web) | t2.micro Spot | ¥200 |
+| i-d (Jump) | t2.micro On-Demand | ¥300 (時間課金) |
+| RDS PostgreSQL | db.t4g.micro | ¥1,200 |
+| RDS MySQL | db.t4g.micro | ¥1,200 |
+| CloudFront | CDN + HTTPS | ¥300 |
+| S3 + その他 | Storage + Transfer | ¥300 |
+| **合計** | | **¥5,500-6,500/月** |
 
-### Monitoring & Logging
-- **CloudWatch Logs**: 各サービス毎に分離 (30日保持)
-- **SQS DLQ**: 最大3回リトライ後にDead Letter Queueへ
+## 📚 Documentation
 
-### Configuration Management
-- **SSM Parameter Store**: 全ての機密情報を暗号化保存
-  - `/kishax/discord/*` - Discord Bot設定
-  - `/kishax/web/*` - Web アプリ設定  
-  - `/kishax/sqs/*` - SQS関連設定
-  - `/kishax/slack/*` - Slack通知設定
-  - `/kishax/redis/*` - Redis接続情報
-  - `/kishax/mc/*` - MC プラグイン設定
+- [Deployment Guide](docs/infrastructure/ec2/deployment.md) - 詳細デプロイ手順
+- [Architecture Details](docs/infrastructure/ec2/architecture.md) - アーキテクチャ詳細
+- [MC Requirements](docs/infrastructure/ec2/mc-requirements.md) - MC Server要件
+- [Next Challenges](docs/infrastructure/ec2/next-challenge.md) - 今後の改善案
 
-### 新環境変数 (kishax-api統合)
-- **QUEUE_MODE**: `WEB` または `MC` でメッセージ方向制御
-- **REDIS_URL**: Redis Pub/Sub 接続URL
-- **WEB_API_KEY**: Web ↔ MC 通信認証キー
-- **MC_REDIS_URL**: MC用Redis接続URL（必要に応じて）
+## 🔄 Recent Updates
+
+### 2025-12-14
+- ✅ i-c (Web Server) デプロイ完了
+- ✅ MC Server: servers.json動的管理システム実装
+- ✅ ディレクトリ構造リファクタリング完了
+- ✅ S3 Docker Images導入（クロスアーキテクチャビルド対応）
+- ✅ CloudFront設定修正（Next.js routing対応）
+
+### 2025-12-12
+- ✅ i-b を Public Subnet に移動（コスト最適化）
+- ✅ Security Group整理（Redis専用ポート分離）
+- ✅ S3 VPC Gateway Endpoint追加
 
 ---
 
-**Last Update**: 2025-09-13
+**Maintained by**: Kishax Development Team  
+**Last Update**: 2025-12-14

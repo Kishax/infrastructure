@@ -1274,7 +1274,10 @@ sudo chown ec2-user:ec2-user /opt/minecraft
 cd /opt/minecraft
 
 # Gitリポジトリクローン
-git clone https://github.com/Kishax/minecraft-server.git .
+git clone https://github.com/Kishax/kishax.git .
+
+# infra/migrate-to-ec2 ブランチにチェックアウト
+git checkout infra/migrate-to-ec2
 ```
 
 ### 3-4. 環境変数ファイル生成
@@ -1285,16 +1288,30 @@ cd /opt/minecraft
 # .envファイル生成
 cat > .env << EOF
 # ===================================
-# Minecraft Server Configuration (i-a, EC2)
+# MC Server Configuration (i-a, EC2)
 # ===================================
 
-# Database Configuration (RDS MySQL)
-# terraform.tfvarsのmysql_passwordを使用
-DB_HOST=${RDS_MYSQL_ENDPOINT}
-DB_PORT=3306
-DB_NAME=minecraft
-DB_USER=admin
-DB_PASSWORD=YOUR_MYSQL_PASSWORD_HERE
+# MySQL Configuration (RDS MySQL)
+MYSQL_HOST=${RDS_MYSQL_ENDPOINT}
+MYSQL_DATABASE=mc
+MYSQL_USER=admin
+MYSQL_PASSWORD=YOUR_MYSQL_PASSWORD_HERE
+
+# Seed Control (production: skip seeds, development: load seeds)
+SEED_ENV=production
+
+# Spigot/Velocity Memory Configuration
+SPIGOT_MEMORY=6G
+VELOCITY_MEMORY=1G
+
+# Server Configuration
+HOME_SERVER_NAME=spigot
+HOME_SERVER_IP=127.0.0.1
+
+# Auth API Configuration (i-b)
+CONFIRM_URL=http://${INSTANCE_ID_B_PRIVATE_IP}:8080/mc/auth
+AUTH_API_URL=http://${INSTANCE_ID_B_PRIVATE_IP}:8080
+AUTH_API_KEY=COPY_FROM_I_B_AUTH_API_KEY
 
 # AWS SQS Configuration
 AWS_REGION=ap-northeast-1
@@ -1304,24 +1321,18 @@ TO_WEB_QUEUE_URL=${TO_WEB_QUEUE_URL}
 TO_MC_QUEUE_URL=${TO_MC_QUEUE_URL}
 TO_DISCORD_QUEUE_URL=${TO_DISCORD_QUEUE_URL}
 
-# Redis Configuration (i-b上のRedis #1)
-REDIS_HOST=${INSTANCE_ID_B_PRIVATE_IP}
-REDIS_PORT=6379
+# Redis Configuration (i-b host Redis #1)
+REDIS_URL=redis://${INSTANCE_ID_B_PRIVATE_IP}:6379
 REDIS_CONNECTION_TIMEOUT=5000
+REDIS_COMMAND_TIMEOUT=3000
 
-# Queue Mode
+# Queue Configuration
 QUEUE_MODE=MC
-
-# Minecraft Server Configuration
-MC_SERVER_PORT=25565
-MC_MAX_PLAYERS=20
-MC_VIEW_DISTANCE=10
-MC_SIMULATION_DISTANCE=10
-
-# Authentication API Configuration
-# AUTH_API_KEYはi-bで生成した値と同じものを使用
-AUTH_API_URL=http://${INSTANCE_ID_B_PRIVATE_IP}:8080
-AUTH_API_KEY=COPY_FROM_I_B_AUTH_API_KEY
+SQS_WORKER_ENABLED=true
+SQS_WORKER_POLLING_INTERVAL_SECONDS=5
+SQS_WORKER_MAX_MESSAGES=10
+SQS_WORKER_WAIT_TIME_SECONDS=20
+SQS_WORKER_VISIBILITY_TIMEOUT_SECONDS=30
 
 # Logging Configuration
 LOG_LEVEL=INFO
@@ -1345,6 +1356,7 @@ cat .env
 > **重要**: 
 > - `YOUR_MYSQL_PASSWORD_HERE`: `terraform.tfvars` の `mysql_password` の値を使用
 > - `COPY_FROM_I_B_AUTH_API_KEY`: i-b の `/opt/api/.env` の `AUTH_API_KEY` の値をコピー
+> - `SEED_ENV=production`: 本番環境のためシードデータの投入をスキップ（開発環境では`development`に変更）
 
 ### 3-5. Route53 DNS更新スクリプト確認
 

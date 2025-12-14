@@ -448,6 +448,189 @@ aws ec2 describe-security-groups \
 
 ---
 
+### 3-5. RDS MySQLへのデータインポート
+
+既存Minecraftサーバーのデータベースダンプファイルをインポートする場合、Jump Server経由でRDS MySQLにアクセスします。
+
+#### 3-5-1. RDSエンドポイント情報を取得
+
+```bash
+cd /Users/tk/git/Kishax/infrastructure/terraform
+
+# MySQLエンドポイントを取得
+export RDS_MYSQL_ENDPOINT=$(terraform output -raw mysql_endpoint)
+echo "MySQL Endpoint: $RDS_MYSQL_ENDPOINT"
+
+# ホスト名とポートを分離
+export RDS_MYSQL_HOST=$(echo $RDS_MYSQL_ENDPOINT | cut -d':' -f1)
+export RDS_MYSQL_PORT=$(echo $RDS_MYSQL_ENDPOINT | cut -d':' -f2)
+echo "Host: $RDS_MYSQL_HOST"
+echo "Port: $RDS_MYSQL_PORT"
+```
+
+#### 3-5-2. Jump Server経由でポートフォワーディング
+
+**ターミナル1（ポートフォワーディング）**:
+```bash
+# Jump ServerのインスタンスIDを取得
+cd /Users/tk/git/Kishax/infrastructure/terraform
+export INSTANCE_ID_D=$(terraform output -raw jump_server_instance_id)
+export RDS_MYSQL_ENDPOINT=$(terraform output -raw mysql_endpoint)
+export RDS_MYSQL_HOST=$(echo $RDS_MYSQL_ENDPOINT | cut -d':' -f1)
+export RDS_MYSQL_PORT=$(echo $RDS_MYSQL_ENDPOINT | cut -d':' -f2)
+
+# ポートフォワーディング開始（このターミナルは開いたまま）
+aws ssm start-session \
+  --target $INSTANCE_ID_D \
+  --document-name AWS-StartPortForwardingSessionToRemoteHost \
+  --parameters "{\"host\":[\"$RDS_MYSQL_HOST\"],\"portNumber\":[\"$RDS_MYSQL_PORT\"],\"localPortNumber\":[\"3306\"]}" \
+  --profile AdministratorAccess-126112056177
+```
+
+#### 3-5-3. ダンプファイルをインポート
+
+**ターミナル2（新しいターミナルを開く）**:
+```bash
+cd /Users/tk/git/Kishax/infrastructure/.bak/db/mc
+
+# MySQL接続情報（パスワードはterraform.tfvarsから取得）
+export MYSQL_HOST=localhost
+export MYSQL_PORT=3306
+export MYSQL_USER=admin
+export MYSQL_PASSWORD='<terraform.tfvarsのmysql_passwordの値>'
+export MYSQL_DATABASE=mc
+
+# 接続テスト
+mysql -h $MYSQL_HOST -P $MYSQL_PORT -u $MYSQL_USER -p"$MYSQL_PASSWORD" -e "SELECT VERSION();"
+
+# データベース存在確認
+mysql -h $MYSQL_HOST -P $MYSQL_PORT -u $MYSQL_USER -p"$MYSQL_PASSWORD" -e "SHOW DATABASES;"
+
+# mcデータベースに切り替えてテーブル確認（既存データがある場合）
+mysql -h $MYSQL_HOST -P $MYSQL_PORT -u $MYSQL_USER -p"$MYSQL_PASSWORD" $MYSQL_DATABASE -e "SHOW TABLES;"
+
+# 全SQLファイルを順番にインポート
+for sql_file in *.sql; do
+  echo "Importing $sql_file..."
+  mysql -h $MYSQL_HOST -P $MYSQL_PORT -u $MYSQL_USER -p"$MYSQL_PASSWORD" $MYSQL_DATABASE < "$sql_file"
+  if [ $? -eq 0 ]; then
+    echo "✓ Successfully imported: $sql_file"
+  else
+    echo "✗ Failed to import: $sql_file"
+  fi
+done
+
+# インポート確認
+echo "Checking imported tables..."
+mysql -h $MYSQL_HOST -P $MYSQL_PORT -u $MYSQL_USER -p"$MYSQL_PASSWORD" $MYSQL_DATABASE -e "SHOW TABLES;"
+
+# テーブル件数確認
+mysql -h $MYSQL_HOST -P $MYSQL_PORT -u $MYSQL_USER -p"$MYSQL_PASSWORD" $MYSQL_DATABASE -e "
+SELECT 
+  table_name AS 'Table',
+  table_rows AS 'Rows'
+FROM information_schema.tables
+WHERE table_schema = 'mc'
+ORDER BY table_name;
+"
+```
+
+**個別インポートする場合**:
+```bash
+# 主要テーブル
+mysql -h $MYSQL_HOST -P $MYSQL_PORT -u $MYSQL_USER -p"$MYSQL_PASSWORD" $MYSQL_DATABASE < members_202512141845.sql
+mysql -h $MYSQL_HOST -P $MYSQL_PORT -u $MYSQL_USER -p"$MYSQL_PASSWORD" $MYSQL_DATABASE < status_202512141846.sql
+mysql -h $MYSQL_HOST -P $MYSQL_PORT -u $MYSQL_USER -p"$MYSQL_PASSWORD" $MYSQL_DATABASE < coords_202512141843.sql
+
+# LuckPerms権限データ
+mysql -h $MYSQL_HOST -P $MYSQL_PORT -u $MYSQL_USER -p"$MYSQL_PASSWORD" $MYSQL_DATABASE < lp_groups_202512141845.sql
+mysql -h $MYSQL_HOST -P $MYSQL_PORT -u $MYSQL_USER -p"$MYSQL_PASSWORD" $MYSQL_DATABASE < lp_players_202512141845.sql
+mysql -h $MYSQL_HOST -P $MYSQL_PORT -u $MYSQL_USER -p"$MYSQL_PASSWORD" $MYSQL_DATABASE < lp_group_permissions_202512141844.sql
+mysql -h $MYSQL_HOST -P $MYSQL_PORT -u $MYSQL_USER -p"$MYSQL_PASSWORD" $MYSQL_DATABASE < lp_user_permissions_202512141845.sql
+mysql -h $MYSQL_HOST -P $MYSQL_PORT -u $MYSQL_USER -p"$MYSQL_PASSWORD" $MYSQL_DATABASE < lp_actions_202512141844.sql
+
+# テレポートポイント
+mysql -h $MYSQL_HOST -P $MYSQL_PORT -u $MYSQL_USER -p"$MYSQL_PASSWORD" $MYSQL_DATABASE < tp_points_202512141846.sql
+
+# ログとリクエスト
+mysql -h $MYSQL_HOST -P $MYSQL_PORT -u $MYSQL_USER -p"$MYSQL_PASSWORD" $MYSQL_DATABASE < log_202512141844.sql
+mysql -h $MYSQL_HOST -P $MYSQL_PORT -u $MYSQL_USER -p"$MYSQL_PASSWORD" $MYSQL_DATABASE < requests_202512141845.sql
+
+# 画像データ（サイズが大きいため最後に）
+mysql -h $MYSQL_HOST -P $MYSQL_PORT -u $MYSQL_USER -p"$MYSQL_PASSWORD" $MYSQL_DATABASE < images_202512141844.sql
+mysql -h $MYSQL_HOST -P $MYSQL_PORT -u $MYSQL_USER -p"$MYSQL_PASSWORD" $MYSQL_DATABASE < image_tiles_202512141844.sql
+
+# 設定
+mysql -h $MYSQL_HOST -P $MYSQL_PORT -u $MYSQL_USER -p"$MYSQL_PASSWORD" $MYSQL_DATABASE < settings_202512141846.sql
+```
+
+**大きなファイルをインポートする場合の最適化**:
+```bash
+# image_tilesなど大きなファイルの場合、max_allowed_packetを増やす
+mysql -h $MYSQL_HOST -P $MYSQL_PORT -u $MYSQL_USER -p"$MYSQL_PASSWORD" $MYSQL_DATABASE -e "
+SET GLOBAL max_allowed_packet=1073741824;  -- 1GB
+SHOW VARIABLES LIKE 'max_allowed_packet';
+"
+
+# その後、大きなファイルをインポート
+mysql -h $MYSQL_HOST -P $MYSQL_PORT -u $MYSQL_USER -p"$MYSQL_PASSWORD" $MYSQL_DATABASE < image_tiles_202512141844.sql
+```
+
+#### 3-5-4. トラブルシューティング
+
+**接続できない場合**:
+```bash
+# Jump Serverからの疎通確認
+aws ssm start-session \
+  --target $INSTANCE_ID_D \
+  --profile AdministratorAccess-126112056177
+
+# Jump Server上で実行
+telnet <RDS_MYSQL_HOST> 3306
+# または
+nc -zv <RDS_MYSQL_HOST> 3306
+```
+
+**セキュリティグループ確認**:
+```bash
+# RDS Security Group確認（Jump ServerのSGからのアクセスが許可されているか）
+aws ec2 describe-security-groups \
+  --profile AdministratorAccess-126112056177 \
+  --filters "Name=tag:Name,Values=kishax-production-rds-sg" \
+  --query 'SecurityGroups[0].IpPermissions[?ToPort==`3306`]' \
+  --output json
+```
+
+**文字コード確認**:
+```bash
+# MySQLの文字コード設定を確認
+mysql -h $MYSQL_HOST -P $MYSQL_PORT -u $MYSQL_USER -p"$MYSQL_PASSWORD" -e "
+SHOW VARIABLES LIKE 'character_set%';
+SHOW VARIABLES LIKE 'collation%';
+"
+
+# 必要に応じてデータベースの文字コードを変更
+mysql -h $MYSQL_HOST -P $MYSQL_PORT -u $MYSQL_USER -p"$MYSQL_PASSWORD" -e "
+ALTER DATABASE mc CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+"
+```
+
+**インポートエラーが発生した場合**:
+```bash
+# エラーログを確認
+mysql -h $MYSQL_HOST -P $MYSQL_PORT -u $MYSQL_USER -p"$MYSQL_PASSWORD" $MYSQL_DATABASE 2>&1 | tee import_errors.log
+
+# 特定のテーブルだけ削除して再インポート
+mysql -h $MYSQL_HOST -P $MYSQL_PORT -u $MYSQL_USER -p"$MYSQL_PASSWORD" $MYSQL_DATABASE -e "
+DROP TABLE IF EXISTS image_tiles;
+"
+mysql -h $MYSQL_HOST -P $MYSQL_PORT -u $MYSQL_USER -p"$MYSQL_PASSWORD" $MYSQL_DATABASE < image_tiles_202512141844.sql
+```
+
+> **Note**: データインポート完了後、ターミナル1のポートフォワーディングは`Ctrl+C`で終了してください。
+
+---
+
 ### 4. EC2インスタンスIDを取得
 
 ```bash

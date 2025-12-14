@@ -333,7 +333,122 @@ chown ec2-user:ec2-user /opt/*/.env
 grep -r "^\.env$" /opt/*/.gitignore
 ```
 
-### 3. EC2インスタンスIDを取得
+### 3. RDS PostgreSQLへのデータインポート
+
+既存データベースのダンプファイルをインポートする場合、Jump Server経由でRDS PostgreSQLにアクセスします。
+
+#### 3-1. RDSエンドポイント情報を取得
+
+```bash
+cd /Users/tk/git/Kishax/infrastructure/terraform
+
+# PostgreSQLエンドポイントを取得
+export RDS_POSTGRES_ENDPOINT=$(terraform output -raw postgres_endpoint)
+echo "PostgreSQL Endpoint: $RDS_POSTGRES_ENDPOINT"
+
+# ホスト名とポートを分離
+export RDS_POSTGRES_HOST=$(echo $RDS_POSTGRES_ENDPOINT | cut -d':' -f1)
+export RDS_POSTGRES_PORT=$(echo $RDS_POSTGRES_ENDPOINT | cut -d':' -f2)
+echo "Host: $RDS_POSTGRES_HOST"
+echo "Port: $RDS_POSTGRES_PORT"
+```
+
+#### 3-2. Jump Server経由でポートフォワーディング
+
+**ターミナル1（ポートフォワーディング）**:
+```bash
+# Jump ServerのインスタンスIDを取得
+cd /Users/tk/git/Kishax/infrastructure/terraform
+export INSTANCE_ID_D=$(terraform output -raw jump_server_instance_id)
+export RDS_POSTGRES_ENDPOINT=$(terraform output -raw postgres_endpoint)
+export RDS_POSTGRES_HOST=$(echo $RDS_POSTGRES_ENDPOINT | cut -d':' -f1)
+export RDS_POSTGRES_PORT=$(echo $RDS_POSTGRES_ENDPOINT | cut -d':' -f2)
+
+# ポートフォワーディング開始（このターミナルは開いたまま）
+aws ssm start-session \
+  --target $INSTANCE_ID_D \
+  --document-name AWS-StartPortForwardingSessionToRemoteHost \
+  --parameters "{\"host\":[\"$RDS_POSTGRES_HOST\"],\"portNumber\":[\"$RDS_POSTGRES_PORT\"],\"localPortNumber\":[\"5432\"]}" \
+  --profile AdministratorAccess-126112056177
+```
+
+#### 3-3. ダンプファイルをインポート
+
+**ターミナル2（新しいターミナルを開く）**:
+```bash
+cd /Users/tk/git/Kishax/infrastructure/.bak/db/postgres
+
+# PostgreSQL接続情報（パスワードはterraform.tfvarsから取得）
+export PGHOST=localhost
+export PGPORT=5432
+export PGUSER=postgres
+export PGPASSWORD='<terraform.tfvarsのpostgres_passwordの値>'
+export PGDATABASE=kishax_main
+
+# 接続テスト
+psql -c "SELECT version();"
+
+# テーブル一覧確認（既存データがある場合）
+psql -c "\dt"
+
+# 全SQLファイルを順番にインポート
+for sql_file in *.sql; do
+  echo "Importing $sql_file..."
+  psql -f "$sql_file"
+done
+
+# インポート確認
+psql -c "\dt"  # テーブル一覧
+psql -c "SELECT table_name, table_type FROM information_schema.tables WHERE table_schema='public' ORDER BY table_name;"
+```
+
+**個別インポートする場合**:
+```bash
+# スキーママイグレーション履歴
+psql -f _prisma_migrations.sql
+
+# テーブルデータ（依存関係順）
+psql -f accounts.sql
+psql -f users.sql
+psql -f sessions.sql
+psql -f verificationtokens.sql
+psql -f minecraft_players.sql
+psql -f members.sql
+psql -f counters.sql
+psql -f status.sql
+psql -f tasks.sql
+```
+
+#### 3-4. トラブルシューティング
+
+**接続できない場合**:
+```bash
+# Jump Serverからの疎通確認
+aws ssm start-session \
+  --target $INSTANCE_ID_D \
+  --profile AdministratorAccess-126112056177
+
+# Jump Server上で実行
+telnet <RDS_POSTGRES_HOST> 5432
+# または
+nc -zv <RDS_POSTGRES_HOST> 5432
+```
+
+**セキュリティグループ確認**:
+```bash
+# RDS Security Group確認（Jump ServerのSGからのアクセスが許可されているか）
+aws ec2 describe-security-groups \
+  --profile AdministratorAccess-126112056177 \
+  --filters "Name=tag:Name,Values=kishax-production-rds-sg" \
+  --query 'SecurityGroups[0].IpPermissions[?ToPort==`5432`]' \
+  --output json
+```
+
+> **Note**: データインポート完了後、ターミナル1のポートフォワーディングは`Ctrl+C`で終了してください。
+
+---
+
+### 4. EC2インスタンスIDを取得
 
 ```bash
 # i-d (Jump Server)
@@ -355,7 +470,7 @@ echo "i-c: $INSTANCE_ID_C"
 echo "i-a: $INSTANCE_ID_A"
 ```
 
-### 4. EC2インスタンスのPrivate IPを取得
+### 5. EC2インスタンスのPrivate IPを取得
 
 ```bash
 # i-b (API Server) Private IP

@@ -76,7 +76,7 @@ resource "aws_iam_role_policy_attachment" "mc_server_ssm_session" {
   policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
 }
 
-# MC Server Policy - S3 Access (Docker Images)
+# MC Server Policy - S3 Access (Docker Images, World Data, Image Maps)
 resource "aws_iam_role_policy" "mc_server_s3" {
   name = "kishax-${var.environment}-mc-s3-policy"
   role = aws_iam_role.mc_server.id
@@ -89,6 +89,8 @@ resource "aws_iam_role_policy" "mc_server_s3" {
         Action = [
           "s3:GetObject",
           "s3:PutObject",
+          "s3:DeleteObject",
+          "s3:HeadObject",
           "s3:ListBucket"
         ]
         Resource = [

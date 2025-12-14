@@ -1291,8 +1291,11 @@ cat > .env << EOF
 # MC Server Configuration (i-a, EC2)
 # ===================================
 
+# Overall Memory Configuration
+OVERALL_MEMORY=8.0
+
 # MySQL Configuration (RDS MySQL)
-MYSQL_HOST=${RDS_MYSQL_ENDPOINT}
+MYSQL_HOST=${RDS_MYSQL_HOST}
 MYSQL_DATABASE=mc
 MYSQL_USER=admin
 MYSQL_PASSWORD=YOUR_MYSQL_PASSWORD_HERE
@@ -1300,16 +1303,8 @@ MYSQL_PASSWORD=YOUR_MYSQL_PASSWORD_HERE
 # Seed Control (production: skip seeds, development: load seeds)
 SEED_ENV=production
 
-# Spigot/Velocity Memory Configuration
-SPIGOT_MEMORY=6G
-VELOCITY_MEMORY=1G
-
-# Server Configuration
-HOME_SERVER_NAME=spigot
-HOME_SERVER_IP=127.0.0.1
-
 # Auth API Configuration (i-b)
-CONFIRM_URL=http://${INSTANCE_ID_B_PRIVATE_IP}:8080/mc/auth
+# Note: CONFIRM_URL is auto-generated from AUTH_API_URL as: \${AUTH_API_URL}/mc/auth
 AUTH_API_URL=http://${INSTANCE_ID_B_PRIVATE_IP}:8080
 AUTH_API_KEY=COPY_FROM_I_B_AUTH_API_KEY
 

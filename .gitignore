@@ -1,6 +1,7 @@
 tfplan 
 ### プロジェクト固有 ###
 .env
+.env.auto
 .env.backup
 .env.backup.new
 .env.api

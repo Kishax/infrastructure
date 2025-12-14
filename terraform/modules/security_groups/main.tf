@@ -62,19 +62,20 @@ resource "aws_security_group" "api_server" {
     security_groups = [aws_security_group.web_server.id]
   }
 
-  # Redis from i-a and i-c
+  # Redis #1 (MC用) from i-a
   ingress {
-    description     = "Redis from MC Server (i-a)"
+    description     = "Redis MC from MC Server (i-a)"
     from_port       = 6379
     to_port         = 6379
     protocol        = "tcp"
     security_groups = [aws_security_group.mc_server.id]
   }
 
+  # Redis #2 (Web用) from i-c
   ingress {
-    description     = "Redis from Web Server (i-c)"
-    from_port       = 6379
-    to_port         = 6379
+    description     = "Redis Web from Web Server (i-c)"
+    from_port       = 6380
+    to_port         = 6380
     protocol        = "tcp"
     security_groups = [aws_security_group.web_server.id]
   }

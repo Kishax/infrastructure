@@ -8,6 +8,7 @@ tfplan
 .env.mc
 .env.web
 .bak/*
+.db/
 jdt.ls-java-project/
 *~
 experience/

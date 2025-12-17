@@ -95,7 +95,9 @@ resource "aws_iam_role_policy" "mc_server_s3" {
         ]
         Resource = [
           var.s3_docker_images_bucket_arn,
-          "${var.s3_docker_images_bucket_arn}/*"
+          "${var.s3_docker_images_bucket_arn}/*",
+          var.s3_image_maps_bucket_arn,
+          "${var.s3_image_maps_bucket_arn}/*"
         ]
       }
     ]

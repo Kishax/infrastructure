@@ -631,6 +631,198 @@ mysql -h $MYSQL_HOST -P $MYSQL_PORT -u $MYSQL_USER -p"$MYSQL_PASSWORD" $MYSQL_DA
 
 ---
 
+### 3-6. S3画像ストレージ設定（Minecraft Image Maps）
+
+Minecraftプラグインで生成された画像マップをS3に保存するための設定を追加します。
+
+#### 3-6-1. S3ストレージ設定をMySQLに追加
+
+**ターミナル2（MySQL接続中）**:
+```bash
+cd /Users/tk/git/Kishax/infrastructure/.bak/db/mc
+
+# S3画像ストレージ設定をインポート
+mysql -h $MYSQL_HOST -P $MYSQL_PORT -u $MYSQL_USER -p"$MYSQL_PASSWORD" $MYSQL_DATABASE < s3_image_storage_settings.sql
+
+# 設定確認
+mysql -h $MYSQL_HOST -P $MYSQL_PORT -u $MYSQL_USER -p"$MYSQL_PASSWORD" $MYSQL_DATABASE -e "
+SELECT name, value, description 
+FROM settings 
+WHERE name LIKE 'IMAGE_STORAGE_MODE' OR name LIKE 'S3_%'
+ORDER BY name;
+"
+```
+
+**デフォルト設定値**:
+| 設定名 | 値 | 説明 |
+|--------|-----|------|
+| `IMAGE_STORAGE_MODE` | `local` | ストレージモード (`local` or `s3`) |
+| `S3_BUCKET_NAME` | `kishax-production-image-maps` | S3バケット名（画像マップ専用） |
+| `S3_PREFIX` | `images/` | S3キープレフィックス |
+| `S3_REGION` | `ap-northeast-1` | AWSリージョン |
+| `S3_USE_INSTANCE_PROFILE` | `true` | IAMインスタンスプロファイルを使用 |
+| `S3_CACHE_ENABLED` | `true` | ローカルキャッシュを有効化 |
+| `S3_CACHE_DIRECTORY` | `/mc/spigot/cache/images` | キャッシュディレクトリ |
+
+#### 3-6-2. S3ストレージモードを有効化（オプション）
+
+本番環境でS3を使用する場合は、`IMAGE_STORAGE_MODE`を`s3`に変更します：
+
+```bash
+# S3モードに切り替え
+mysql -h $MYSQL_HOST -P $MYSQL_PORT -u $MYSQL_USER -p"$MYSQL_PASSWORD" $MYSQL_DATABASE -e "
+UPDATE settings 
+SET value = 's3' 
+WHERE name = 'IMAGE_STORAGE_MODE';
+"
+
+# 変更確認
+mysql -h $MYSQL_HOST -P $MYSQL_PORT -u $MYSQL_USER -p"$MYSQL_PASSWORD" $MYSQL_DATABASE -e "
+SELECT name, value FROM settings WHERE name = 'IMAGE_STORAGE_MODE';
+"
+```
+
+> **Note**: 
+> - デフォルトは`local`モード（従来のローカルファイルシステム保存）
+> - S3モードに変更後は、Minecraftサーバーコンテナの再起動が必要
+> - IAM権限（`s3:PutObject`, `s3:GetObject`, `s3:DeleteObject`, `s3:HeadObject`, `s3:ListBucket`）が必要
+
+#### 3-6-3. S3ディレクトリ構造
+
+画像マップは専用バケット内に以下の構造で保存されます：
+
+```
+s3://kishax-production-image-maps/images/
+├── 20241201/
+│   ├── a1b2c3d4-e5f6-7890-abcd-ef1234567890.png
+│   ├── b2c3d4e5-f6g7-8901-bcde-f12345678901.png
+│   └── ...
+├── 20241202/
+│   └── ...
+└── 20241215/
+    └── ...
+```
+
+- **形式**: `YYYYMMDD/[UUID].png`
+- **YYYYMMDD**: 画像生成日（JST）
+- **UUID**: Minecraft内部のマップUUID
+- **バケット**: `kishax-production-image-maps`（Dockerイメージバケットとは別）
+- **ライフサイクル**: 永続保存（自動削除なし）
+
+#### 3-6-4. ローカルキャッシュディレクトリの作成
+
+Minecraftサーバー（i-a）で事前にキャッシュディレクトリを作成しておきます：
+
+```bash
+# i-aにSSM接続
+aws ssm start-session \
+  --target $INSTANCE_ID_A \
+  --profile AdministratorAccess-126112056177
+
+# i-a上で実行
+sudo mkdir -p /opt/mc/cache/images
+sudo chown ec2-user:ec2-user /opt/mc/cache/images
+sudo chmod 755 /opt/mc/cache/images
+
+# 確認
+ls -la /opt/mc/cache/
+
+# 終了
+exit
+```
+
+#### 3-6-5. IAM権限の確認
+
+Terraform設定により、MC Server (i-a) には既にS3アクセス権限が付与されています：
+
+```bash
+cd /Users/tk/git/Kishax/infrastructure/terraform
+
+# MC ServerのIAMロールを確認
+terraform show | grep -A 20 "aws_iam_role_policy.mc_server_s3"
+```
+
+**付与されているS3権限**:
+- `s3:GetObject` - 画像の読み取り
+- `s3:PutObject` - 画像の保存
+- `s3:DeleteObject` - 画像の削除
+- `s3:HeadObject` - 画像の存在確認
+- `s3:ListBucket` - バケット内のオブジェクト一覧取得
+
+#### 3-6-6. 設定変更後の反映
+
+S3設定を変更した場合、Minecraftサーバーコンテナを再起動：
+
+```bash
+# i-aにSSM接続
+aws ssm start-session \
+  --target $INSTANCE_ID_A \
+  --profile AdministratorAccess-126112056177
+
+# i-a上で実行
+cd /opt/mc
+docker compose restart
+
+# ログ確認（S3クライアント初期化メッセージを確認）
+docker compose logs -f | grep -i "s3\|storage"
+
+# 終了
+exit
+```
+
+#### 3-6-7. トラブルシューティング
+
+**S3接続エラーが発生する場合**:
+```bash
+# IAMインスタンスプロファイルの確認
+aws ec2 describe-instances \
+  --instance-ids $INSTANCE_ID_A \
+  --profile AdministratorAccess-126112056177 \
+  --query 'Reservations[0].Instances[0].IamInstanceProfile' \
+  --output json
+
+# IAMロールに付与されている権限を確認
+aws iam list-attached-role-policies \
+  --role-name kishax-production-mc-role \
+  --profile AdministratorAccess-126112056177
+
+# インラインポリシーを確認
+aws iam list-role-policies \
+  --role-name kishax-production-mc-role \
+  --profile AdministratorAccess-126112056177
+```
+
+**キャッシュが正常に動作しているか確認**:
+```bash
+# i-aにSSM接続して確認
+aws ssm start-session \
+  --target $INSTANCE_ID_A \
+  --profile AdministratorAccess-126112056177
+
+# キャッシュディレクトリ確認
+ls -lah /opt/mc/cache/images/
+
+# 特定の日付のキャッシュ確認
+ls -lah /opt/mc/cache/images/20241215/
+
+# 終了
+exit
+```
+
+**S3バケットの確認**:
+```bash
+# S3バケット名を取得（画像マップ専用バケット）
+export S3_BUCKET=$(terraform output -raw s3_image_maps_bucket_name)
+
+# バケット内の画像を確認
+aws s3 ls s3://$S3_BUCKET/images/ --recursive --profile AdministratorAccess-126112056177
+
+# 特定日付の画像を確認
+aws s3 ls s3://$S3_BUCKET/images/20241215/ --profile AdministratorAccess-126112056177
+```
+
+---
+
 ### 4. EC2インスタンスIDを取得
 
 ```bash

@@ -19,3 +19,8 @@ variable "s3_docker_images_bucket_arn" {
   description = "S3 bucket ARN for Docker images"
   type        = string
 }
+
+variable "s3_image_maps_bucket_arn" {
+  description = "S3 bucket ARN for image maps"
+  type        = string
+}

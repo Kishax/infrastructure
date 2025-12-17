@@ -72,6 +72,7 @@ module "iam" {
   route53_zone_id             = var.route53_zone_id
   mc_domain_name              = var.mc_domain_name
   s3_docker_images_bucket_arn = module.s3.bucket_arn
+  s3_image_maps_bucket_arn    = module.s3.image_maps_bucket_arn
 }
 
 # RDS Module

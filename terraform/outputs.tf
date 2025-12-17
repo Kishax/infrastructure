@@ -138,6 +138,16 @@ output "s3_docker_images_bucket_arn" {
   value       = module.s3.bucket_arn
 }
 
+output "s3_image_maps_bucket_name" {
+  description = "S3 bucket name for image maps"
+  value       = module.s3.image_maps_bucket_name
+}
+
+output "s3_image_maps_bucket_arn" {
+  description = "S3 bucket ARN for image maps"
+  value       = module.s3.image_maps_bucket_arn
+}
+
 output "s3_vpc_endpoint_id" {
   description = "S3 VPC Endpoint ID"
   value       = module.vpc.s3_vpc_endpoint_id

@@ -9,7 +9,14 @@ endif
 
 # AWS Profile設定
 AWS_PROFILE ?= AdministratorAccess-126112056177
+AWS_REGION ?= ap-northeast-1
+ENVIRONMENT ?= production
 export AWS_PROFILE
+export AWS_REGION
+export ENVIRONMENT
+
+# SSH Key設定
+SSH_KEY = ./minecraft.pem
 
 .PHONY: help
 help: ## ヘルプを表示
@@ -77,11 +84,8 @@ env-load: env-check ## Terraform outputから環境変数を読み込む
 		echo "export INSTANCE_ID_B_PRIVATE_IP=\"$$(aws ec2 describe-instances --instance-ids $$INST_B --query Reservations[0].Instances[0].PrivateIpAddress --output text 2>/dev/null || echo "")\"" >> .env.auto; \
 		echo "export INSTANCE_ID_C_PRIVATE_IP=\"$$(aws ec2 describe-instances --instance-ids $$INST_C --query Reservations[0].Instances[0].PrivateIpAddress --output text 2>/dev/null || echo "")\"" >> .env.auto; \
 		echo "" >> .env.auto; \
-		echo "# PostgreSQL connection (from .env)" >> .env.auto; \
-		printf "export PGPASSWORD=\"%s\"\n" "$$POSTGRES_PASSWORD" >> .env.auto; \
-		echo "" >> .env.auto; \
-		echo "# MySQL connection (from .env)" >> .env.auto; \
-		printf "export MYSQL_PASSWORD=\"%s\"\n" "$$MYSQL_PASSWORD" >> .env.auto; \
+		echo "# Note: POSTGRES_PASSWORD and MYSQL_PASSWORD are defined in .env" >> .env.auto; \
+		echo "# They are not re-exported here to avoid shell variable expansion issues" >> .env.auto; \
 		echo "✅ 環境変数を .env.auto に保存しました"; \
 		echo "💡 以下のコマンドで読み込んでください:"; \
 		echo "   source .env && source .env.auto"; \
@@ -266,6 +270,764 @@ ec2-stop-jump: ## i-d (Jump Server)を停止
 	@echo "⏹️  i-d (Jump Server)停止中..."
 	@INSTANCE_ID=$$(cd terraform && terraform output -raw jump_server_id 2>/dev/null); \
 	aws ec2 stop-instances --instance-ids $$INSTANCE_ID --profile $(AWS_PROFILE)
+
+## =============================================================================
+## SSM接続（ポートフォワーディング - このターミナルを占有）
+## =============================================================================
+
+.PHONY: ssm-mc ssm-api ssm-web ssm-jump ssm-mysql ssm-postgres
+
+ssm-mc: ## i-a (MC Server) へポートフォワーディング (localhost:2222)
+	@echo "🔗 MC Server (i-a) へポートフォワーディングを開始します..."
+	@INSTANCE_ID_D=$$(aws ec2 describe-instances --profile $(AWS_PROFILE) --region $(AWS_REGION) \
+		--filters "Name=tag:Name,Values=kishax-$(ENVIRONMENT)-jump-server" "Name=instance-state-name,Values=running" \
+		--query 'Reservations[0].Instances[0].InstanceId' --output text 2>/dev/null); \
+	PRIVATE_IP_A=$$(aws ec2 describe-instances --profile $(AWS_PROFILE) --region $(AWS_REGION) \
+		--filters "Name=tag:Name,Values=kishax-$(ENVIRONMENT)-mc-server" \
+		--query 'Reservations[0].Instances[0].PrivateIpAddress' --output text 2>/dev/null); \
+	if [ -z "$$INSTANCE_ID_D" ] || [ "$$INSTANCE_ID_D" = "None" ]; then \
+		echo "❌ Jump Serverが起動していません"; \
+		exit 1; \
+	fi; \
+	if [ -z "$$PRIVATE_IP_A" ] || [ "$$PRIVATE_IP_A" = "None" ]; then \
+		echo "❌ MC Serverが見つかりません"; \
+		exit 1; \
+	fi; \
+	echo "Jump Server: $$INSTANCE_ID_D"; \
+	echo "Target: $$PRIVATE_IP_A (MC Server)"; \
+	echo "Local Port: 2222"; \
+	echo ""; \
+	echo "✅ ポートフォワーディング開始 (このターミナルは占有されます)"; \
+	echo "📝 別ターミナルで 'make ssh-mc' を実行してSSH接続してください"; \
+	echo ""; \
+	aws ssm start-session \
+		--target $$INSTANCE_ID_D \
+		--document-name AWS-StartPortForwardingSessionToRemoteHost \
+		--parameters "{\"host\":[\"$$PRIVATE_IP_A\"],\"portNumber\":[\"22\"],\"localPortNumber\":[\"2222\"]}" \
+		--profile $(AWS_PROFILE)
+
+ssm-api: ## i-b (API Server) へポートフォワーディング (localhost:2223)
+	@echo "🔗 API Server (i-b) へポートフォワーディングを開始します..."
+	@INSTANCE_ID_D=$$(aws ec2 describe-instances --profile $(AWS_PROFILE) --region $(AWS_REGION) \
+		--filters "Name=tag:Name,Values=kishax-$(ENVIRONMENT)-jump-server" "Name=instance-state-name,Values=running" \
+		--query 'Reservations[0].Instances[0].InstanceId' --output text 2>/dev/null); \
+	PRIVATE_IP_B=$$(aws ec2 describe-instances --profile $(AWS_PROFILE) --region $(AWS_REGION) \
+		--filters "Name=tag:Name,Values=kishax-$(ENVIRONMENT)-api-server" \
+		--query 'Reservations[0].Instances[0].PrivateIpAddress' --output text 2>/dev/null); \
+	if [ -z "$$INSTANCE_ID_D" ] || [ "$$INSTANCE_ID_D" = "None" ]; then \
+		echo "❌ Jump Serverが起動していません"; \
+		exit 1; \
+	fi; \
+	if [ -z "$$PRIVATE_IP_B" ] || [ "$$PRIVATE_IP_B" = "None" ]; then \
+		echo "❌ API Serverが見つかりません"; \
+		exit 1; \
+	fi; \
+	echo "Jump Server: $$INSTANCE_ID_D"; \
+	echo "Target: $$PRIVATE_IP_B (API Server)"; \
+	echo "Local Port: 2223"; \
+	echo ""; \
+	echo "✅ ポートフォワーディング開始 (このターミナルは占有されます)"; \
+	echo "📝 別ターミナルで 'make ssh-api' を実行してSSH接続してください"; \
+	echo ""; \
+	aws ssm start-session \
+		--target $$INSTANCE_ID_D \
+		--document-name AWS-StartPortForwardingSessionToRemoteHost \
+		--parameters "{\"host\":[\"$$PRIVATE_IP_B\"],\"portNumber\":[\"22\"],\"localPortNumber\":[\"2223\"]}" \
+		--profile $(AWS_PROFILE)
+
+ssm-web: ## i-c (Web Server) へポートフォワーディング (localhost:2224)
+	@echo "🔗 Web Server (i-c) へポートフォワーディングを開始します..."
+	@INSTANCE_ID_D=$$(aws ec2 describe-instances --profile $(AWS_PROFILE) --region $(AWS_REGION) \
+		--filters "Name=tag:Name,Values=kishax-$(ENVIRONMENT)-jump-server" "Name=instance-state-name,Values=running" \
+		--query 'Reservations[0].Instances[0].InstanceId' --output text 2>/dev/null); \
+	PRIVATE_IP_C=$$(aws ec2 describe-instances --profile $(AWS_PROFILE) --region $(AWS_REGION) \
+		--filters "Name=tag:Name,Values=kishax-$(ENVIRONMENT)-web-server" \
+		--query 'Reservations[0].Instances[0].PrivateIpAddress' --output text 2>/dev/null); \
+	if [ -z "$$INSTANCE_ID_D" ] || [ "$$INSTANCE_ID_D" = "None" ]; then \
+		echo "❌ Jump Serverが起動していません"; \
+		exit 1; \
+	fi; \
+	if [ -z "$$PRIVATE_IP_C" ] || [ "$$PRIVATE_IP_C" = "None" ]; then \
+		echo "❌ Web Serverが見つかりません"; \
+		exit 1; \
+	fi; \
+	echo "Jump Server: $$INSTANCE_ID_D"; \
+	echo "Target: $$PRIVATE_IP_C (Web Server)"; \
+	echo "Local Port: 2224"; \
+	echo ""; \
+	echo "✅ ポートフォワーディング開始 (このターミナルは占有されます)"; \
+	echo "📝 別ターミナルで 'make ssh-web' を実行してSSH接続してください"; \
+	echo ""; \
+	aws ssm start-session \
+		--target $$INSTANCE_ID_D \
+		--document-name AWS-StartPortForwardingSessionToRemoteHost \
+		--parameters "{\"host\":[\"$$PRIVATE_IP_C\"],\"portNumber\":[\"22\"],\"localPortNumber\":[\"2224\"]}" \
+		--profile $(AWS_PROFILE)
+
+ssm-jump: ## i-d (Jump Server) へSSM直接接続
+	@echo "🔗 Jump Server (i-d) へSSMセッションを開始します..."
+	@INSTANCE_ID=$$(aws ec2 describe-instances --profile $(AWS_PROFILE) --region $(AWS_REGION) \
+		--filters "Name=tag:Name,Values=kishax-$(ENVIRONMENT)-jump-server" "Name=instance-state-name,Values=running" \
+		--query 'Reservations[0].Instances[0].InstanceId' --output text 2>/dev/null); \
+	if [ -z "$$INSTANCE_ID" ] || [ "$$INSTANCE_ID" = "None" ]; then \
+		echo "❌ Jump Serverが起動していません"; \
+		exit 1; \
+	fi; \
+	echo "Instance ID: $$INSTANCE_ID"; \
+	echo ""; \
+	aws ssm start-session --target $$INSTANCE_ID --profile $(AWS_PROFILE)
+
+ssm-mysql: ## RDS MySQL へポートフォワーディング (localhost:3307)
+	@echo "🔗 RDS MySQL へポートフォワーディングを開始します..."
+	@if [ ! -f .env.auto ]; then \
+		echo "❌ .env.autoが見つかりません。'make env-load'を実行してください"; \
+		exit 1; \
+	fi; \
+	source .env.auto; \
+	if [ -z "$$RDS_MYSQL_HOST" ]; then \
+		echo "❌ RDS_MYSQL_HOSTが設定されていません"; \
+		exit 1; \
+	fi; \
+	INSTANCE_ID_D=$$(aws ec2 describe-instances --profile $(AWS_PROFILE) --region $(AWS_REGION) \
+		--filters "Name=tag:Name,Values=kishax-$(ENVIRONMENT)-jump-server" "Name=instance-state-name,Values=running" \
+		--query 'Reservations[0].Instances[0].InstanceId' --output text 2>/dev/null); \
+	if [ -z "$$INSTANCE_ID_D" ] || [ "$$INSTANCE_ID_D" = "None" ]; then \
+		echo "❌ Jump Serverが起動していません"; \
+		exit 1; \
+	fi; \
+	echo "Jump Server: $$INSTANCE_ID_D"; \
+	echo "Target: $$RDS_MYSQL_HOST:$$RDS_MYSQL_PORT"; \
+	echo "Local Port: 3307"; \
+	echo "Database: kishax_mc"; \
+	echo ""; \
+	echo "✅ ポートフォワーディング開始 (このターミナルは占有されます)"; \
+	echo "📝 別ターミナルで 'make ssh-mysql' を実行してMySQL接続してください"; \
+	echo ""; \
+	aws ssm start-session \
+		--target $$INSTANCE_ID_D \
+		--document-name AWS-StartPortForwardingSessionToRemoteHost \
+		--parameters "{\"host\":[\"$$RDS_MYSQL_HOST\"],\"portNumber\":[\"$$RDS_MYSQL_PORT\"],\"localPortNumber\":[\"3307\"]}" \
+		--profile $(AWS_PROFILE)
+
+ssm-postgres: ## RDS PostgreSQL へポートフォワーディング (localhost:5433)
+	@echo "🔗 RDS PostgreSQL へポートフォワーディングを開始します..."
+	@if [ ! -f .env.auto ]; then \
+		echo "❌ .env.autoが見つかりません。'make env-load'を実行してください"; \
+		exit 1; \
+	fi; \
+	source .env.auto; \
+	if [ -z "$$RDS_POSTGRES_HOST" ]; then \
+		echo "❌ RDS_POSTGRES_HOSTが設定されていません"; \
+		exit 1; \
+	fi; \
+	INSTANCE_ID_D=$$(aws ec2 describe-instances --profile $(AWS_PROFILE) --region $(AWS_REGION) \
+		--filters "Name=tag:Name,Values=kishax-$(ENVIRONMENT)-jump-server" "Name=instance-state-name,Values=running" \
+		--query 'Reservations[0].Instances[0].InstanceId' --output text 2>/dev/null); \
+	if [ -z "$$INSTANCE_ID_D" ] || [ "$$INSTANCE_ID_D" = "None" ]; then \
+		echo "❌ Jump Serverが起動していません"; \
+		exit 1; \
+	fi; \
+	echo "Jump Server: $$INSTANCE_ID_D"; \
+	echo "Target: $$RDS_POSTGRES_HOST:$$RDS_POSTGRES_PORT"; \
+	echo "Local Port: 5433"; \
+	echo "Database: kishax_web"; \
+	echo ""; \
+	echo "✅ ポートフォワーディング開始 (このターミナルは占有されます)"; \
+	echo "📝 別ターミナルで 'make ssh-postgres' を実行してPostgreSQL接続してください"; \
+	echo ""; \
+	aws ssm start-session \
+		--target $$INSTANCE_ID_D \
+		--document-name AWS-StartPortForwardingSessionToRemoteHost \
+		--parameters "{\"host\":[\"$$RDS_POSTGRES_HOST\"],\"portNumber\":[\"$$RDS_POSTGRES_PORT\"],\"localPortNumber\":[\"5433\"]}" \
+		--profile $(AWS_PROFILE)
+
+## =============================================================================
+## SSH接続（純粋なSSH - 事前に ssm-* でポートフォワーディングが必要）
+## =============================================================================
+
+.PHONY: ssh-mc ssh-api ssh-web ssh-mysql ssh-postgres
+
+ssh-mc: ## i-a (MC Server) へSSH接続 (要: 別ターミナルで make ssm-mc)
+	@echo "🔗 MC Server (i-a) へSSH接続します..."
+	@if [ ! -f "$(SSH_KEY)" ]; then \
+		echo "❌ SSH鍵ファイルが見つかりません: $(SSH_KEY)"; \
+		exit 1; \
+	fi; \
+	echo "SSH Key: $(SSH_KEY)"; \
+	echo "Local Port: 2222"; \
+	echo ""; \
+	echo "⚠️  事前に別ターミナルで 'make ssm-mc' を実行してください"; \
+	echo ""; \
+	if grep -q "\[localhost\]:2222" ~/.ssh/known_hosts 2>/dev/null; then \
+		echo "⚠️  known_hostsに[localhost]:2222のエントリが存在します"; \
+		read -p "削除しますか？ (y/N): " answer; \
+		if [ "$$answer" = "y" ] || [ "$$answer" = "Y" ]; then \
+			ssh-keygen -R "[localhost]:2222" 2>/dev/null || true; \
+			echo "✅ known_hostsから削除しました"; \
+		fi; \
+	fi; \
+	ssh -i $(SSH_KEY) -p 2222 ec2-user@localhost
+
+ssh-api: ## i-b (API Server) へSSH接続 (要: 別ターミナルで make ssm-api)
+	@echo "🔗 API Server (i-b) へSSH接続します..."
+	@if [ ! -f "$(SSH_KEY)" ]; then \
+		echo "❌ SSH鍵ファイルが見つかりません: $(SSH_KEY)"; \
+		exit 1; \
+	fi; \
+	echo "SSH Key: $(SSH_KEY)"; \
+	echo "Local Port: 2223"; \
+	echo ""; \
+	echo "⚠️  事前に別ターミナルで 'make ssm-api' を実行してください"; \
+	echo ""; \
+	if grep -q "\[localhost\]:2223" ~/.ssh/known_hosts 2>/dev/null; then \
+		echo "⚠️  known_hostsに[localhost]:2223のエントリが存在します"; \
+		read -p "削除しますか？ (y/N): " answer; \
+		if [ "$$answer" = "y" ] || [ "$$answer" = "Y" ]; then \
+			ssh-keygen -R "[localhost]:2223" 2>/dev/null || true; \
+			echo "✅ known_hostsから削除しました"; \
+		fi; \
+	fi; \
+	ssh -i $(SSH_KEY) -p 2223 ec2-user@localhost
+
+ssh-web: ## i-c (Web Server) へSSH接続 (要: 別ターミナルで make ssm-web)
+	@echo "🔗 Web Server (i-c) へSSH接続します..."
+	@if [ ! -f "$(SSH_KEY)" ]; then \
+		echo "❌ SSH鍵ファイルが見つかりません: $(SSH_KEY)"; \
+		exit 1; \
+	fi; \
+	echo "SSH Key: $(SSH_KEY)"; \
+	echo "Local Port: 2224"; \
+	echo ""; \
+	echo "⚠️  事前に別ターミナルで 'make ssm-web' を実行してください"; \
+	echo ""; \
+	if grep -q "\[localhost\]:2224" ~/.ssh/known_hosts 2>/dev/null; then \
+		echo "⚠️  known_hostsに[localhost]:2224のエントリが存在します"; \
+		read -p "削除しますか？ (y/N): " answer; \
+		if [ "$$answer" = "y" ] || [ "$$answer" = "Y" ]; then \
+			ssh-keygen -R "[localhost]:2224" 2>/dev/null || true; \
+			echo "✅ known_hostsから削除しました"; \
+		fi; \
+	fi; \
+	ssh -i $(SSH_KEY) -p 2224 ec2-user@localhost
+
+ssh-mysql: ## RDS MySQL へMySQL接続 (要: 別ターミナルで make ssm-mysql)
+	@echo "🔗 RDS MySQL へMySQL接続します..."
+	@if [ ! -f .env.auto ]; then \
+		echo "❌ .env.autoが見つかりません。'make env-load'を実行してください"; \
+		exit 1; \
+	fi; \
+	source .env && source .env.auto; \
+	if [ -z "$$MYSQL_PASSWORD" ]; then \
+		echo "❌ MYSQL_PASSWORDが設定されていません"; \
+		exit 1; \
+	fi; \
+	MYSQL_USER=$${MYSQL_USER:-root}; \
+	echo "Database: kishax_mc"; \
+	echo "User: $$MYSQL_USER"; \
+	echo "Host: localhost:3307"; \
+	echo ""; \
+	echo "⚠️  事前に別ターミナルで 'make ssm-mysql' を実行してください"; \
+	echo ""; \
+	mysql -h 127.0.0.1 -P 3307 -u "$$MYSQL_USER" -p"$$MYSQL_PASSWORD" kishax_mc
+
+ssh-postgres: ## RDS PostgreSQL へpsql接続 (要: 別ターミナルで make ssm-postgres)
+	@echo "🔗 RDS PostgreSQL へpsql接続します..."
+	@if [ ! -f .env.auto ]; then \
+		echo "❌ .env.autoが見つかりません。'make env-load'を実行してください"; \
+		exit 1; \
+	fi; \
+	source .env && source .env.auto; \
+	if [ -z "$$POSTGRES_PASSWORD" ]; then \
+		echo "❌ POSTGRES_PASSWORDが設定されていません"; \
+		exit 1; \
+	fi; \
+	echo "Database: kishax_web"; \
+	echo "User: postgres"; \
+	echo "Host: localhost:5433"; \
+	echo ""; \
+	echo "⚠️  事前に別ターミナルで 'make ssm-postgres' を実行してください"; \
+	echo ""; \
+	PGPASSWORD="$$POSTGRES_PASSWORD" psql -h 127.0.0.1 -p 5433 -U postgres -d kishax_web
+
+## =============================================================================
+## MySQL シード管理
+## =============================================================================
+
+.PHONY: mysql-seed-list mysql-seed-import mysql-seed-tables mysql-seed-s3 mysql-seed-all mysql-seed-reset mysql-seed-fix-db-names
+
+mysql-seed-tables: ## MySQLテーブルを作成 (要: make ssm-mysql)
+	@echo "🔧 MySQLテーブルを作成します"
+	@echo ""
+	@if [ ! -f .env.auto ]; then \
+		echo "❌ .env.autoが見つかりません。'make env-load'を実行してください"; \
+		exit 1; \
+	fi; \
+	if [ ! -f .db/mc/TABLES.sql ]; then \
+		echo "❌ .db/mc/TABLES.sql が見つかりません"; \
+		exit 1; \
+	fi; \
+	source .env && source .env.auto; \
+	if [ -z "$$MYSQL_PASSWORD" ]; then \
+		echo "❌ MYSQL_PASSWORDが設定されていません"; \
+		echo "💡 'source .env && source .env.auto' を実行してください"; \
+		exit 1; \
+	fi; \
+	MYSQL_USER=$${MYSQL_USER:-root}; \
+	echo "Database: kishax_mc"; \
+	echo "User: $$MYSQL_USER"; \
+	echo "Host: localhost:3307"; \
+	echo ""; \
+	echo "⚠️  事前に別ターミナルで 'make ssm-mysql' を実行してください"; \
+	echo ""; \
+	read -p "テーブルを作成しますか？ (y/N): " answer; \
+	if [ "$$answer" != "y" ] && [ "$$answer" != "Y" ]; then \
+		echo "キャンセルしました"; \
+		exit 0; \
+	fi; \
+	echo ""; \
+	echo "🔧 テーブル作成中..."; \
+	mysql -h 127.0.0.1 -P 3307 -u "$$MYSQL_USER" -p"$$MYSQL_PASSWORD" kishax_mc < .db/mc/TABLES.sql 2>&1 | grep -v "Using a password on the command line" || true; \
+	if [ $$? -eq 0 ]; then \
+		echo "✅ テーブルを作成しました"; \
+	else \
+		echo "❌ テーブル作成に失敗しました"; \
+		exit 1; \
+	fi
+
+mysql-seed-list: ## .db/mc のシードファイル一覧を表示
+	@echo "📋 MySQLシードファイル一覧:"
+	@echo ""
+	@if [ -d .db/mc ]; then \
+		ls -lh .db/mc/*.sql 2>/dev/null | awk '{print "  " $$9 " (" $$5 ")"}' || echo "  ファイルが見つかりません"; \
+	else \
+		echo "  ❌ .db/mc ディレクトリが存在しません"; \
+	fi
+
+mysql-seed-import: ## 指定したシードファイルをRDS MySQLに挿入 (要: make ssm-mysql)
+	@echo "📥 MySQLシードファイルをインポートします"
+	@echo ""
+	@if [ ! -f .env.auto ]; then \
+		echo "❌ .env.autoが見つかりません。'make env-load'を実行してください"; \
+		exit 1; \
+	fi; \
+	if [ -z "$(FILE)" ]; then \
+		echo "❌ FILEパラメータを指定してください"; \
+		echo ""; \
+		echo "例: make mysql-seed-import FILE=.db/mc/s3_image_storage_settings_fixed.sql"; \
+		echo ""; \
+		$(MAKE) mysql-seed-list; \
+		exit 1; \
+	fi; \
+	if [ ! -f "$(FILE)" ]; then \
+		echo "❌ ファイルが見つかりません: $(FILE)"; \
+		exit 1; \
+	fi; \
+	source .env && source .env.auto; \
+	MYSQL_USER=$${MYSQL_USER:-root}; \
+	echo "ファイル: $(FILE)"; \
+	echo "Database: kishax_mc"; \
+	echo "User: $$MYSQL_USER"; \
+	echo "Host: localhost:3307"; \
+	echo ""; \
+	echo "⚠️  事前に別ターミナルで 'make ssm-mysql' を実行してください"; \
+	echo ""; \
+	read -p "このファイルをインポートしますか？ (y/N): " answer; \
+	if [ "$$answer" = "y" ] || [ "$$answer" = "Y" ]; then \
+		ERROR_OUTPUT=$$(mysql -h 127.0.0.1 -P 3307 -u "$$MYSQL_USER" -p"$$MYSQL_PASSWORD" kishax_mc < "$(FILE)" 2>&1 | grep -v "Using a password on the command line"); \
+		if [ -z "$$ERROR_OUTPUT" ]; then \
+			echo ""; \
+			echo "✅ インポート完了"; \
+		else \
+			echo ""; \
+			echo "❌ インポートに失敗しました"; \
+			echo "📝 エラー: $$ERROR_OUTPUT"; \
+			exit 1; \
+		fi; \
+	else \
+		echo "キャンセルしました"; \
+	fi
+
+mysql-seed-s3: ## S3画像ストレージ設定をインポート (要: make ssm-mysql)
+	@$(MAKE) mysql-seed-import FILE=.db/mc/s3_image_storage_settings_fixed.sql
+
+mysql-seed-fix-db-names: ## .db/mc のSQLファイルのデータベース名を修正 (mc. -> kishax_mc.)
+	@echo "🔧 データベース名を修正します (mc. -> kishax_mc.)"
+	@echo ""
+	@if [ ! -d .db/mc ]; then \
+		echo "❌ .db/mc ディレクトリが存在しません"; \
+		exit 1; \
+	fi; \
+	echo "📋 修正対象ファイル:"; \
+	for file in .db/mc/*.sql; do \
+		if [ -f "$$file" ] && ! echo "$$file" | grep -q "_fixed.sql"; then \
+			if grep -q "INSERT INTO mc\." "$$file" 2>/dev/null; then \
+				echo "  - $$(basename $$file)"; \
+			fi; \
+		fi; \
+	done; \
+	echo ""; \
+	read -p "データベース名を修正しますか？ (y/N): " answer; \
+	if [ "$$answer" != "y" ] && [ "$$answer" != "Y" ]; then \
+		echo "キャンセルしました"; \
+		exit 0; \
+	fi; \
+	echo ""; \
+	echo "🔧 修正中..."; \
+	SUCCESS_COUNT=0; \
+	for file in .db/mc/*.sql; do \
+		if [ -f "$$file" ] && ! echo "$$file" | grep -q "_fixed.sql"; then \
+			FILE_NAME=$$(basename "$$file"); \
+			if grep -q "INSERT INTO mc\." "$$file" 2>/dev/null; then \
+				sed 's/INSERT INTO mc\./INSERT INTO kishax_mc./g' "$$file" > "$${file%.sql}_fixed.sql"; \
+				if [ -f "$${file%.sql}_fixed.sql" ]; then \
+					echo "  ✅ $$FILE_NAME -> $${FILE_NAME%.sql}_fixed.sql"; \
+					SUCCESS_COUNT=$$((SUCCESS_COUNT + 1)); \
+				fi; \
+			fi; \
+		fi; \
+	done; \
+	echo ""; \
+	echo "✅ $$SUCCESS_COUNT ファイルを修正しました"; \
+	echo "💡 修正されたファイルは *_fixed.sql として保存されています"
+
+mysql-seed-reset: ## kishax_mc データベースの全テーブルを削除 (要: make ssm-mysql)
+	@echo "🗑️  MySQL データベースをリセットします"
+	@echo ""
+	@if [ ! -f .env.auto ]; then \
+		echo "❌ .env.autoが見つかりません。'make env-load'を実行してください"; \
+		exit 1; \
+	fi; \
+	source .env && source .env.auto; \
+	MYSQL_USER=$${MYSQL_USER:-root}; \
+	echo "Database: kishax_mc"; \
+	echo "User: $$MYSQL_USER"; \
+	echo "Host: localhost:3307"; \
+	echo ""; \
+	echo "⚠️  事前に別ターミナルで 'make ssm-mysql' を実行してください"; \
+	echo "⚠️  警告: 全てのテーブルとデータが削除されます！"; \
+	echo ""; \
+	read -p "本当に削除しますか？ (yes/N): " answer; \
+	if [ "$$answer" != "yes" ]; then \
+		echo "キャンセルしました"; \
+		exit 0; \
+	fi; \
+	echo ""; \
+	echo "🗑️  テーブル削除中..."; \
+	mysql -h 127.0.0.1 -P 3307 -u "$$MYSQL_USER" -p"$$MYSQL_PASSWORD" kishax_mc -e " \
+		SET FOREIGN_KEY_CHECKS = 0; \
+		SET @tables = NULL; \
+		SELECT GROUP_CONCAT(table_name) INTO @tables \
+		  FROM information_schema.tables \
+		  WHERE table_schema = 'kishax_mc'; \
+		SET @tables = CONCAT('DROP TABLE IF EXISTS ', @tables); \
+		PREPARE stmt FROM @tables; \
+		EXECUTE stmt; \
+		DEALLOCATE PREPARE stmt; \
+		SET FOREIGN_KEY_CHECKS = 1; \
+	" 2>/dev/null; \
+	echo ""; \
+	echo "✅ データベースをリセットしました"; \
+	echo "💡 テーブルを再作成するには、アプリケーションを起動してください"
+
+mysql-seed-all: ## .db/mc の全シードファイルを一括インポート (要: make ssm-mysql)
+	@echo "📥 MySQL 全シードファイルを一括インポートします"
+	@echo ""
+	@if [ ! -f .env.auto ]; then \
+		echo "❌ .env.autoが見つかりません。'make env-load'を実行してください"; \
+		exit 1; \
+	fi; \
+	if [ ! -d .db/mc ]; then \
+		echo "❌ .db/mc ディレクトリが存在しません"; \
+		exit 1; \
+	fi; \
+	FILE_COUNT=$$(ls -1 .db/mc/*_fixed.sql 2>/dev/null | wc -l | tr -d ' '); \
+	if [ "$$FILE_COUNT" -eq 0 ]; then \
+		echo "❌ .db/mc に*_fixed.sqlファイルが見つかりません"; \
+		echo "💡 'make mysql-seed-fix-db-names' を先に実行してください"; \
+		exit 1; \
+	fi; \
+	source .env && source .env.auto; \
+	if [ -z "$$MYSQL_PASSWORD" ]; then \
+		echo "❌ MYSQL_PASSWORDが設定されていません"; \
+		echo "💡 'source .env && source .env.auto' を実行してください"; \
+		exit 1; \
+	fi; \
+	MYSQL_USER=$${MYSQL_USER:-root}; \
+	echo "対象ファイル数: $$FILE_COUNT"; \
+	echo "Database: kishax_mc"; \
+	echo "Host: localhost:3307"; \
+	echo "User: $$MYSQL_USER"; \
+	echo "Password length: $${#MYSQL_PASSWORD}"; \
+	echo ""; \
+	echo "🔍 MySQL接続確認中..."; \
+	CONNECTION_TEST=$$(mysql -h 127.0.0.1 -P 3307 -u "$$MYSQL_USER" -p"$$MYSQL_PASSWORD" -e "SELECT 1" kishax_mc 2>&1 | grep -v "Using a password on the command line"); \
+	if [ $$? -ne 0 ] || echo "$$CONNECTION_TEST" | grep -q "ERROR"; then \
+		echo "❌ MySQLに接続できません"; \
+		echo ""; \
+		echo "📝 エラー詳細:"; \
+		echo "$$CONNECTION_TEST" | head -n 3; \
+		echo ""; \
+		echo "💡 解決方法:"; \
+		echo "   1. 別ターミナルで 'make ssm-mysql' を実行してください"; \
+		echo "   2. ポートフォワーディングが正常に開始されるまで待ちます"; \
+		echo "      ('Port 3307 opened' メッセージを確認)"; \
+		echo "   3. このターミナルで 'source .env && source .env.auto' を実行"; \
+		echo "   4. 再度このコマンドを実行してください"; \
+		echo ""; \
+		echo "🔍 デバッグ情報:"; \
+		echo "   - ポート確認: lsof -i :3307"; \
+		echo "   - 手動接続: mysql -h 127.0.0.1 -P 3307 -u $$MYSQL_USER -p kishax_mc"; \
+		echo ""; \
+		exit 1; \
+	fi; \
+	echo "✅ MySQL接続成功"; \
+	echo ""; \
+	echo "📋 対象ファイル一覧:"; \
+	ls -1h .db/mc/*_fixed.sql | while read file; do \
+		SIZE=$$(ls -lh "$$file" | awk '{print $$5}'); \
+		echo "  - $$(basename $$file) ($$SIZE)"; \
+	done; \
+	echo ""; \
+	echo "⚠️  大きなファイルがある場合、時間がかかる可能性があります"; \
+	echo ""; \
+	read -p "全てのファイルをインポートしますか？ (y/N): " answer; \
+	if [ "$$answer" != "y" ] && [ "$$answer" != "Y" ]; then \
+		echo "キャンセルしました"; \
+		exit 0; \
+	fi; \
+	echo ""; \
+	echo "🚀 インポート開始..."; \
+	echo ""; \
+	SUCCESS_COUNT=0; \
+	FAIL_COUNT=0; \
+	FAILED_FILES=""; \
+	for sql_file in .db/mc/*_fixed.sql; do \
+		if [ -f "$$sql_file" ]; then \
+			FILE_NAME=$$(basename "$$sql_file"); \
+			FILE_SIZE=$$(ls -lh "$$sql_file" | awk '{print $$5}'); \
+			echo "📄 [$$((SUCCESS_COUNT + FAIL_COUNT + 1))/$$FILE_COUNT] $$FILE_NAME ($$FILE_SIZE)..."; \
+			ERROR_MSG=$$(mysql -h 127.0.0.1 -P 3307 -u "$$MYSQL_USER" -p"$$MYSQL_PASSWORD" kishax_mc < "$$sql_file" 2>&1 | grep -v "Using a password on the command line"); \
+			EXIT_CODE=$$?; \
+			if [ $$EXIT_CODE -eq 0 ] && [ -z "$$ERROR_MSG" ]; then \
+				echo "   ✅ 成功"; \
+				SUCCESS_COUNT=$$((SUCCESS_COUNT + 1)); \
+			else \
+				if [ -n "$$ERROR_MSG" ]; then \
+					echo "   ❌ 失敗"; \
+					echo "   📝 エラー: $$(echo "$$ERROR_MSG" | head -n 1)"; \
+					FAIL_COUNT=$$((FAIL_COUNT + 1)); \
+					FAILED_FILES="$$FAILED_FILES  - $$FILE_NAME\n"; \
+				else \
+					echo "   ✅ 成功"; \
+					SUCCESS_COUNT=$$((SUCCESS_COUNT + 1)); \
+				fi; \
+			fi; \
+			echo ""; \
+		fi; \
+	done; \
+	echo ""; \
+	echo "========================================"; \
+	echo "📊 インポート結果"; \
+	echo "========================================"; \
+	echo "✅ 成功: $$SUCCESS_COUNT / $$FILE_COUNT"; \
+	echo "❌ 失敗: $$FAIL_COUNT / $$FILE_COUNT"; \
+	echo "========================================"; \
+	if [ $$FAIL_COUNT -gt 0 ]; then \
+		echo ""; \
+		echo "⚠️  失敗したファイル:"; \
+		echo -e "$$FAILED_FILES"; \
+		echo "💡 個別に確認するには:"; \
+		echo "   make mysql-seed-import FILE=.db/mc/[ファイル名]"; \
+	fi
+
+## =============================================================================
+## PostgreSQL シード管理
+## =============================================================================
+
+.PHONY: postgres-seed-list postgres-seed-import postgres-seed-users postgres-seed-all postgres-seed-reset
+
+postgres-seed-list: ## .bak/db/postgres のシードファイル一覧を表示
+	@echo "📋 PostgreSQLシードファイル一覧:"
+	@echo ""
+	@if [ -d .bak/db/postgres ]; then \
+		ls -lh .bak/db/postgres/*.sql 2>/dev/null | awk '{print "  " $$9 " (" $$5 ")"}' || echo "  ファイルが見つかりません"; \
+	else \
+		echo "  ❌ .bak/db/postgres ディレクトリが存在しません"; \
+	fi
+
+postgres-seed-import: ## 指定したシードファイルをRDS PostgreSQLに挿入 (要: make ssm-postgres)
+	@echo "📥 PostgreSQLシードファイルをインポートします"
+	@echo ""
+	@if [ ! -f .env.auto ]; then \
+		echo "❌ .env.autoが見つかりません。'make env-load'を実行してください"; \
+		exit 1; \
+	fi; \
+	if [ -z "$(FILE)" ]; then \
+		echo "❌ FILEパラメータを指定してください"; \
+		echo ""; \
+		echo "例: make postgres-seed-import FILE=.bak/db/postgres/users_migrated_seed.sql"; \
+		echo ""; \
+		$(MAKE) postgres-seed-list; \
+		exit 1; \
+	fi; \
+	if [ ! -f "$(FILE)" ]; then \
+		echo "❌ ファイルが見つかりません: $(FILE)"; \
+		exit 1; \
+	fi; \
+	source .env && source .env.auto; \
+	echo "ファイル: $(FILE)"; \
+	echo "Database: kishax_web"; \
+	echo "Host: localhost:5433"; \
+	echo ""; \
+	echo "⚠️  事前に別ターミナルで 'make ssm-postgres' を実行してください"; \
+	echo ""; \
+	read -p "このファイルをインポートしますか？ (y/N): " answer; \
+	if [ "$$answer" = "y" ] || [ "$$answer" = "Y" ]; then \
+		PGPASSWORD="$$POSTGRES_PASSWORD" psql -h 127.0.0.1 -p 5433 -U postgres -d kishax_web -f "$(FILE)"; \
+		echo ""; \
+		echo "✅ インポート完了"; \
+	else \
+		echo "キャンセルしました"; \
+	fi
+
+postgres-seed-users: ## ユーザー情報をインポート (要: make ssm-postgres)
+	@$(MAKE) postgres-seed-import FILE=.bak/db/postgres/users_migrated_seed.sql
+
+postgres-seed-reset: ## kishax_web データベースの全テーブルを削除 (要: make ssm-postgres)
+	@echo "🗑️  PostgreSQL データベースをリセットします"
+	@echo ""
+	@if [ ! -f .env.auto ]; then \
+		echo "❌ .env.autoが見つかりません。'make env-load'を実行してください"; \
+		exit 1; \
+	fi; \
+	source .env && source .env.auto; \
+	echo "Database: kishax_web"; \
+	echo "Host: localhost:5433"; \
+	echo ""; \
+	echo "⚠️  事前に別ターミナルで 'make ssm-postgres' を実行してください"; \
+	echo "⚠️  警告: 全てのテーブルとデータが削除されます！"; \
+	echo ""; \
+	read -p "本当に削除しますか？ (yes/N): " answer; \
+	if [ "$$answer" != "yes" ]; then \
+		echo "キャンセルしました"; \
+		exit 0; \
+	fi; \
+	echo ""; \
+	echo "🗑️  テーブル削除中..."; \
+	PGPASSWORD="$$POSTGRES_PASSWORD" psql -h 127.0.0.1 -p 5433 -U postgres -d kishax_web -c " \
+		DO \$\$ DECLARE \
+			r RECORD; \
+		BEGIN \
+			FOR r IN (SELECT tablename FROM pg_tables WHERE schemaname = 'public') LOOP \
+				EXECUTE 'DROP TABLE IF EXISTS ' || quote_ident(r.tablename) || ' CASCADE'; \
+			END LOOP; \
+		END \$\$; \
+	" 2>/dev/null; \
+	echo ""; \
+	echo "✅ データベースをリセットしました"; \
+	echo "💡 テーブルを再作成するには、マイグレーションを実行してください"
+
+postgres-seed-all: ## .bak/db/postgres の全シードファイルを一括インポート (要: make ssm-postgres)
+	@echo "📥 PostgreSQL 全シードファイルを一括インポートします"
+	@echo ""
+	@if [ ! -f .env.auto ]; then \
+		echo "❌ .env.autoが見つかりません。'make env-load'を実行してください"; \
+		exit 1; \
+	fi; \
+	if [ ! -d .bak/db/postgres ]; then \
+		echo "❌ .bak/db/postgres ディレクトリが存在しません"; \
+		exit 1; \
+	fi; \
+	FILE_COUNT=$$(ls -1 .bak/db/postgres/*.sql 2>/dev/null | wc -l | tr -d ' '); \
+	if [ "$$FILE_COUNT" -eq 0 ]; then \
+		echo "❌ .bak/db/postgres にSQLファイルが見つかりません"; \
+		exit 1; \
+	fi; \
+	source .env && source .env.auto; \
+	if [ -z "$$POSTGRES_PASSWORD" ]; then \
+		echo "❌ POSTGRES_PASSWORDが設定されていません"; \
+		echo "💡 'source .env && source .env.auto' を実行してください"; \
+		exit 1; \
+	fi; \
+	echo "対象ファイル数: $$FILE_COUNT"; \
+	echo "Database: kishax_web"; \
+	echo "Host: localhost:5433"; \
+	echo "User: postgres"; \
+	echo ""; \
+	echo "🔍 PostgreSQL接続確認中..."; \
+	CONNECTION_TEST=$$(PGPASSWORD="$$POSTGRES_PASSWORD" psql -h 127.0.0.1 -p 5433 -U postgres -d kishax_web -c "SELECT 1" 2>&1); \
+	if [ $$? -ne 0 ]; then \
+		echo "❌ PostgreSQLに接続できません"; \
+		echo ""; \
+		echo "📝 エラー詳細:"; \
+		echo "$$CONNECTION_TEST" | head -n 3; \
+		echo ""; \
+		echo "💡 解決方法:"; \
+		echo "   1. 別ターミナルで 'make ssm-postgres' を実行してください"; \
+		echo "   2. ポートフォワーディングが正常に開始されるまで待ちます"; \
+		echo "      ('Port 5433 opened' メッセージを確認)"; \
+		echo "   3. このターミナルで 'source .env && source .env.auto' を実行"; \
+		echo "   4. 再度このコマンドを実行してください"; \
+		echo ""; \
+		echo "🔍 デバッグ情報:"; \
+		echo "   - ポート確認: lsof -i :5433"; \
+		echo "   - 手動接続: PGPASSWORD=*** psql -h 127.0.0.1 -p 5433 -U postgres -d kishax_web"; \
+		echo ""; \
+		exit 1; \
+	fi; \
+	echo "✅ PostgreSQL接続成功"; \
+	echo ""; \
+	echo "📋 対象ファイル一覧:"; \
+	ls -1h .bak/db/postgres/*.sql | while read file; do \
+		SIZE=$$(ls -lh "$$file" | awk '{print $$5}'); \
+		echo "  - $$(basename $$file) ($$SIZE)"; \
+	done; \
+	echo ""; \
+	read -p "全てのファイルをインポートしますか？ (y/N): " answer; \
+	if [ "$$answer" != "y" ] && [ "$$answer" != "Y" ]; then \
+		echo "キャンセルしました"; \
+		exit 0; \
+	fi; \
+	echo ""; \
+	echo "🚀 インポート開始..."; \
+	echo ""; \
+	SUCCESS_COUNT=0; \
+	FAIL_COUNT=0; \
+	FAILED_FILES=""; \
+	for sql_file in .bak/db/postgres/*.sql; do \
+		if [ -f "$$sql_file" ]; then \
+			FILE_NAME=$$(basename "$$sql_file"); \
+			FILE_SIZE=$$(ls -lh "$$sql_file" | awk '{print $$5}'); \
+			echo "📄 [$$((SUCCESS_COUNT + FAIL_COUNT + 1))/$$FILE_COUNT] $$FILE_NAME ($$FILE_SIZE)..."; \
+			ERROR_MSG=$$(PGPASSWORD="$$POSTGRES_PASSWORD" psql -h 127.0.0.1 -p 5433 -U postgres -d kishax_web -f "$$sql_file" 2>&1); \
+			if [ $$? -eq 0 ]; then \
+				echo "   ✅ 成功"; \
+				SUCCESS_COUNT=$$((SUCCESS_COUNT + 1)); \
+			else \
+				echo "   ❌ 失敗"; \
+				if [ -n "$$ERROR_MSG" ]; then \
+					echo "   📝 エラー: $$(echo "$$ERROR_MSG" | head -n 1)"; \
+				fi; \
+				FAIL_COUNT=$$((FAIL_COUNT + 1)); \
+				FAILED_FILES="$$FAILED_FILES  - $$FILE_NAME\n"; \
+			fi; \
+			echo ""; \
+		fi; \
+	done; \
+	echo ""; \
+	echo "========================================"; \
+	echo "📊 インポート結果"; \
+	echo "========================================"; \
+	echo "✅ 成功: $$SUCCESS_COUNT / $$FILE_COUNT"; \
+	echo "❌ 失敗: $$FAIL_COUNT / $$FILE_COUNT"; \
+	echo "========================================"; \
+	if [ $$FAIL_COUNT -gt 0 ]; then \
+		echo ""; \
+		echo "⚠️  失敗したファイル:"; \
+		echo -e "$$FAILED_FILES"; \
+		echo "💡 個別に確認するには:"; \
+		echo "   make postgres-seed-import FILE=.bak/db/postgres/[ファイル名]"; \
+	fi
 
 ## =============================================================================
 ## RDS管理

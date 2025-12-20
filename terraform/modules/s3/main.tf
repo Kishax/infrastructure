@@ -170,7 +170,6 @@ resource "aws_s3_bucket_policy" "image_maps" {
           "s3:GetObject",
           "s3:PutObject",
           "s3:DeleteObject",
-          "s3:HeadObject",
           "s3:ListBucket"
         ]
         Resource = [
@@ -208,7 +207,7 @@ resource "aws_s3_bucket" "world_backups" {
   tags = {
     Name        = "kishax-${var.environment}-world-backups"
     Environment = var.environment
-    Purpose     = "Minecraft world backups, VM deployment, migration work"
+    Purpose     = "Minecraft world backups and VM deployment"
   }
 }
 
@@ -242,7 +241,7 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "world_backups" {
   }
 }
 
-# Lifecycle rule - keep backups for 180 days
+# Lifecycle rule - delete old backups and migration data
 resource "aws_s3_bucket_lifecycle_configuration" "world_backups" {
   bucket = aws_s3_bucket.world_backups.id
 
@@ -263,18 +262,6 @@ resource "aws_s3_bucket_lifecycle_configuration" "world_backups" {
     }
   }
 
-  # VM展開・移植作業用のデータは削除しない
-  rule {
-    id     = "keep-deployment-data"
-    status = "Enabled"
-
-    filter {
-      prefix = "deployment/"
-    }
-
-    # 削除しない（expirationを設定しない）
-  }
-
   # マイグレーション用のデータは90日で削除
   rule {
     id     = "delete-old-migration-data"
@@ -292,6 +279,8 @@ resource "aws_s3_bucket_lifecycle_configuration" "world_backups" {
       noncurrent_days = 30
     }
   }
+  
+  # 注: deployment/プレフィックスには自動削除ルールなし（永続保存）
 }
 
 # Bucket policy to allow access from MC Server (i-a)
@@ -311,7 +300,6 @@ resource "aws_s3_bucket_policy" "world_backups" {
           "s3:GetObject",
           "s3:PutObject",
           "s3:DeleteObject",
-          "s3:HeadObject",
           "s3:ListBucket"
         ]
         Resource = [

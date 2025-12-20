@@ -732,7 +732,9 @@ mysql-seed-reset: ## kishax_mc データベースの全テーブルを削除 (�
 	" 2>/dev/null; \
 	echo ""; \
 	echo "✅ データベースをリセットしました"; \
-	echo "💡 テーブルを再作成するには、アプリケーションを起動してください"
+	echo "💡 次のステップ:"; \
+	echo "   1. make mysql-seed-tables  # テーブルを再作成"; \
+	echo "   2. make mysql-seed-all     # シードデータをインポート"
 
 mysql-seed-all: ## .db/mc の全シードファイルを一括インポート (要: make ssm-mysql)
 	@echo "📥 MySQL 全シードファイルを一括インポートします"
@@ -765,6 +767,11 @@ mysql-seed-all: ## .db/mc の全シードファイルを一括インポート (�
 	echo "Password length: $${#MYSQL_PASSWORD}"; \
 	echo ""; \
 	echo "🔍 MySQL接続確認中..."; \
+	TABLE_COUNT=$$(mysql -h 127.0.0.1 -P 3307 -u "$$MYSQL_USER" -p"$$MYSQL_PASSWORD" kishax_mc -e "SHOW TABLES;" 2>&1 | grep -v "Using a password" | grep -v "Tables_in" | wc -l | tr -d ' '); \
+	if [ "$$TABLE_COUNT" -eq 0 ]; then \
+		echo "⚠️  テーブルが存在しません。先にテーブルを作成します..."; \
+		$(MAKE) mysql-seed-tables; \
+	fi; \
 	CONNECTION_TEST=$$(mysql -h 127.0.0.1 -P 3307 -u "$$MYSQL_USER" -p"$$MYSQL_PASSWORD" -e "SELECT 1" kishax_mc 2>&1 | grep -v "Using a password on the command line"); \
 	if [ $$? -ne 0 ] || echo "$$CONNECTION_TEST" | grep -q "ERROR"; then \
 		echo "❌ MySQLに接続できません"; \

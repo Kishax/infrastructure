@@ -170,7 +170,7 @@ graph TD
 ### 2.4 S3ディレクトリ構造
 
 ```
-s3://kishax-production-docker-images/worlds/
+s3://kishax-production-world-backups/deployment/
 ├── 202512/                          # YYYYMM形式のディレクトリ
 │   └── 1/                           # バージョン番号
 │       ├── latest/                  # サーバー名
@@ -217,13 +217,13 @@ fi
 #### 初回インポート
 ```bash
 # 1. S3にワールドデータをアップロード
-aws s3 sync ./world/ s3://kishax-production-docker-images/worlds/202512/1/latest/world/
-aws s3 sync ./world_nether/ s3://kishax-production-docker-images/worlds/202512/1/latest/world_nether/
-aws s3 sync ./world_the_end/ s3://kishax-production-docker-images/worlds/202512/1/latest/world_the_end/
+aws s3 sync ./world/ s3://kishax-production-world-backups/deployment/202512/1/latest/world/
+aws s3 sync ./world_nether/ s3://kishax-production-world-backups/deployment/202512/1/latest/world_nether/
+aws s3 sync ./world_the_end/ s3://kishax-production-world-backups/deployment/202512/1/latest/world_the_end/
 
 # 2. インポート許可フラグを作成
 touch __IMPORT_ENABLED__
-aws s3 cp __IMPORT_ENABLED__ s3://kishax-production-docker-images/worlds/202512/1/latest/
+aws s3 cp __IMPORT_ENABLED__ s3://kishax-production-world-backups/deployment/202512/1/latest/
 
 # 3. サーバー起動（自動でインポート）
 cd /opt/mc
@@ -377,8 +377,8 @@ aws ec2 describe-instances --instance-ids i-xxx --query 'Reservations[0].Instanc
 
 # 実際にS3にアクセスできるか確認
 aws s3 ls s3://kishax-production-image-maps/
-aws s3 ls s3://kishax-production-docker-images/worlds/
-aws s3 ls s3://kishax-production-world-backups/
+aws s3 ls s3://kishax-production-world-backups/deployment/
+aws s3 ls s3://kishax-production-world-backups/backups/
 ```
 
 ---
@@ -416,13 +416,13 @@ docker compose logs -f | grep -i "s3"
 
 ```bash
 # 1. ワールドデータをS3にアップロード（ローカルから）
-aws s3 sync ./world/ s3://kishax-production-docker-images/worlds/202512/1/latest/world/ \
+aws s3 sync ./world/ s3://kishax-production-world-backups/deployment/202512/1/latest/world/ \
   --profile AdministratorAccess-126112056177 \
   --region ap-northeast-1
 
 # 2. インポート許可フラグを作成
 touch __IMPORT_ENABLED__
-aws s3 cp __IMPORT_ENABLED__ s3://kishax-production-docker-images/worlds/202512/1/latest/ \
+aws s3 cp __IMPORT_ENABLED__ s3://kishax-production-world-backups/deployment/202512/1/latest/ \
   --profile AdministratorAccess-126112056177 \
   --region ap-northeast-1
 
@@ -494,11 +494,11 @@ docker compose restart
 **原因② `__IMPORT_ENABLED__`フラグがS3に存在しない**
 ```bash
 # S3のフラグを確認
-aws s3 ls s3://kishax-production-docker-images/worlds/ --recursive | grep '__IMPORT_ENABLED__'
+aws s3 ls s3://kishax-production-world-backups/deployment/ --recursive | grep '__IMPORT_ENABLED__'
 
 # フラグを作成
 touch __IMPORT_ENABLED__
-aws s3 cp __IMPORT_ENABLED__ s3://kishax-production-docker-images/worlds/202512/1/latest/
+aws s3 cp __IMPORT_ENABLED__ s3://kishax-production-world-backups/deployment/202512/1/latest/
 ```
 
 **原因③ `servers.json`で`s3import: false`になっている**
@@ -519,21 +519,21 @@ docker compose up -d
 #### S3アクセスエラー
 ```bash
 # IAM権限確認（ローカルから）
-aws s3 ls s3://kishax-production-docker-images/worlds/ \
+aws s3 ls s3://kishax-production-world-backups/deployment/ \
   --profile AdministratorAccess-126112056177
 
 # EC2インスタンスからのアクセス確認
 make ssh-mc
-aws s3 ls s3://kishax-production-docker-images/worlds/
+aws s3 ls s3://kishax-production-world-backups/deployment/
 ```
 
 #### ワールドデータが破損している
 ```bash
 # S3のワールドデータ確認
-aws s3 ls s3://kishax-production-docker-images/worlds/202512/1/latest/world/ --recursive
+aws s3 ls s3://kishax-production-world-backups/deployment/202512/1/latest/world/ --recursive
 
 # ダウンロードして確認
-aws s3 sync s3://kishax-production-docker-images/worlds/202512/1/latest/world/ /tmp/world-check/
+aws s3 sync s3://kishax-production-world-backups/deployment/202512/1/latest/world/ /tmp/world-check/
 
 # level.datの確認
 file /tmp/world-check/level.dat
@@ -548,11 +548,12 @@ file /tmp/world-check/level.dat
 ```bash
 # S3バケットのオブジェクト数
 aws s3 ls s3://kishax-production-image-maps/images/ --recursive | wc -l
-aws s3 ls s3://kishax-production-docker-images/worlds/ --recursive | wc -l
+aws s3 ls s3://kishax-production-world-backups/deployment/ --recursive | wc -l
+aws s3 ls s3://kishax-production-world-backups/backups/ --recursive | wc -l
 
 # S3バケットのサイズ
 aws s3 ls s3://kishax-production-image-maps/ --recursive --summarize --human-readable
-aws s3 ls s3://kishax-production-docker-images/ --recursive --summarize --human-readable
+aws s3 ls s3://kishax-production-world-backups/ --recursive --summarize --human-readable
 ```
 
 ### 7.2 アプリケーションログ

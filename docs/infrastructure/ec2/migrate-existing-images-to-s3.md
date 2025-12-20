@@ -92,8 +92,8 @@ aws s3 ls s3://$S3_BUCKET/$S3_PREFIX
 aws s3 sync $IMAGE_DIR/ s3://$S3_BUCKET/$S3_PREFIX --dryrun
 
 # 出力例:
-# (dryrun) upload: 20241201/abc123.png to s3://kishax-docker-images/images/20241201/abc123.png
-# (dryrun) upload: 20241202/def456.png to s3://kishax-docker-images/images/20241202/def456.png
+# (dryrun) upload: 20241201/abc123.png to s3://kishax-production-image-maps/images/20241201/abc123.png
+# (dryrun) upload: 20241202/def456.png to s3://kishax-production-image-maps/images/20241202/def456.png
 ```
 
 ### ステップ4: 一括アップロード（本番実行）
@@ -189,7 +189,7 @@ docker compose restart
 docker compose logs -f | grep -i "s3\|storage"
 
 # 以下のようなログが表示されれば成功:
-# ImageStorageManager initialized with S3 storage (bucket: kishax-docker-images, prefix: images/)
+# ImageStorageManager initialized with S3 storage (bucket: kishax-production-image-maps, prefix: images/)
 # S3Client initialized with Instance Profile (region: ap-northeast-1)
 ```
 

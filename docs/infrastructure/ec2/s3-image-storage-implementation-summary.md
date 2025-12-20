@@ -190,7 +190,7 @@ docker compose restart
 docker compose logs -f | grep -i "s3\|storage"
 
 # S3バケットの確認
-aws s3 ls s3://kishax-docker-images/images/ --recursive
+aws s3 ls s3://kishax-production-image-maps/images/ --recursive
 ```
 
 ## テスト方法

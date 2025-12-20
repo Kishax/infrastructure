@@ -24,3 +24,8 @@ variable "s3_image_maps_bucket_arn" {
   description = "S3 bucket ARN for image maps"
   type        = string
 }
+
+variable "s3_world_backups_bucket_arn" {
+  description = "S3 bucket ARN for world backups"
+  type        = string
+}

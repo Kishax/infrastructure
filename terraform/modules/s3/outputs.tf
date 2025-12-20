@@ -31,3 +31,19 @@ output "image_maps_bucket_regional_domain_name" {
   description = "S3 bucket regional domain name for image maps"
   value       = aws_s3_bucket.image_maps.bucket_regional_domain_name
 }
+
+# World Backups Bucket
+output "world_backups_bucket_name" {
+  description = "S3 bucket name for world backups"
+  value       = aws_s3_bucket.world_backups.id
+}
+
+output "world_backups_bucket_arn" {
+  description = "S3 bucket ARN for world backups"
+  value       = aws_s3_bucket.world_backups.arn
+}
+
+output "world_backups_bucket_regional_domain_name" {
+  description = "S3 bucket regional domain name for world backups"
+  value       = aws_s3_bucket.world_backups.bucket_regional_domain_name
+}

@@ -69,6 +69,8 @@ env-load: env-check ## Terraform outputから環境変数を読み込む
 		echo "" >> .env.auto; \
 		echo "# S3" >> .env.auto; \
 		echo "export S3_BUCKET=\"$$(cd terraform && terraform output -raw s3_docker_images_bucket_name 2>/dev/null)\"" >> .env.auto; \
+		echo "export S3_IMAGE_MAPS_BUCKET=\"$$(cd terraform && terraform output -raw s3_image_maps_bucket_name 2>/dev/null)\"" >> .env.auto; \
+		echo "export S3_WORLD_BACKUPS_BUCKET=\"$$(cd terraform && terraform output -raw s3_world_backups_bucket_name 2>/dev/null)\"" >> .env.auto; \
 		echo "" >> .env.auto; \
 		echo "# EC2 Instance IDs" >> .env.auto; \
 		echo "export INSTANCE_ID_A=\"$$(cd terraform && terraform output -raw mc_server_instance_id 2>/dev/null)\"" >> .env.auto; \
@@ -110,6 +112,8 @@ env-show: ## 現在の環境変数を表示
 	@echo ""
 	@echo "=== S3 ==="
 	@echo "S3_BUCKET: $$S3_BUCKET"
+	@echo "S3_IMAGE_MAPS_BUCKET: $$S3_IMAGE_MAPS_BUCKET"
+	@echo "S3_WORLD_BACKUPS_BUCKET: $$S3_WORLD_BACKUPS_BUCKET"
 	@echo ""
 	@echo "=== EC2 ==="
 	@echo "INSTANCE_ID_A (MC): $$INSTANCE_ID_A"
@@ -541,13 +545,14 @@ ssh-postgres: ## RDS PostgreSQL へpsql接続 (要: 別ターミナルで make s
 		echo "❌ POSTGRES_PASSWORDが設定されていません"; \
 		exit 1; \
 	fi; \
+	POSTGRES_USER=$${POSTGRES_USER:-postgres}; \
 	echo "Database: kishax_web"; \
-	echo "User: postgres"; \
+	echo "User: $$POSTGRES_USER"; \
 	echo "Host: localhost:5433"; \
 	echo ""; \
 	echo "⚠️  事前に別ターミナルで 'make ssm-postgres' を実行してください"; \
 	echo ""; \
-	PGPASSWORD="$$POSTGRES_PASSWORD" psql -h 127.0.0.1 -p 5433 -U postgres -d kishax_web
+	PGPASSWORD="$$POSTGRES_PASSWORD" psql -h 127.0.0.1 -p 5433 -U "$$POSTGRES_USER" -d kishax_web
 
 ## =============================================================================
 ## MySQL シード管理
@@ -844,15 +849,84 @@ mysql-seed-all: ## .db/mc の全シードファイルを一括インポート (�
 ## PostgreSQL シード管理
 ## =============================================================================
 
-.PHONY: postgres-seed-list postgres-seed-import postgres-seed-users postgres-seed-all postgres-seed-reset
+.PHONY: postgres-create-db postgres-seed-tables postgres-seed-list postgres-seed-import postgres-seed-users postgres-seed-all postgres-seed-reset
 
-postgres-seed-list: ## .bak/db/postgres のシードファイル一覧を表示
+postgres-create-db: ## PostgreSQLデータベース (kishax_web) を作成 (要: make ssm-postgres)
+	@echo "🔧 PostgreSQLデータベースを作成します"
+	@echo ""
+	@if [ ! -f .env.auto ]; then \
+		echo "❌ .env.autoが見つかりません。'make env-load'を実行してください"; \
+		exit 1; \
+	fi; \
+	source .env && source .env.auto; \
+	if [ -z "$$POSTGRES_PASSWORD" ]; then \
+		echo "❌ POSTGRES_PASSWORDが設定されていません"; \
+		exit 1; \
+	fi; \
+	POSTGRES_USER=$${POSTGRES_USER:-postgres}; \
+	echo "Database: kishax_web"; \
+	echo "User: $$POSTGRES_USER"; \
+	echo "Host: localhost:5433"; \
+	echo ""; \
+	echo "⚠️  事前に別ターミナルで 'make ssm-postgres' を実行してください"; \
+	echo ""; \
+	read -p "データベースを作成しますか？ (y/N): " answer; \
+	if [ "$$answer" != "y" ] && [ "$$answer" != "Y" ]; then \
+		echo "キャンセルしました"; \
+		exit 0; \
+	fi; \
+	echo ""; \
+	echo "🔧 データベース作成中..."; \
+	PGPASSWORD="$$POSTGRES_PASSWORD" psql -h 127.0.0.1 -p 5433 -U "$$POSTGRES_USER" -d postgres -c "CREATE DATABASE kishax_web;" 2>&1 | grep -v "already exists" || true; \
+	if [ $$? -eq 0 ]; then \
+		echo "✅ データベースを作成しました（または既に存在します）"; \
+	else \
+		echo "❌ データベース作成に失敗しました"; \
+		exit 1; \
+	fi
+
+postgres-seed-tables: ## PostgreSQLテーブルを作成 (Prisma migrate) (要: make ssm-postgres)
+	@echo "🔧 PostgreSQLテーブルを作成します (Prisma)"
+	@echo ""
+	@if [ ! -f .env.auto ]; then \
+		echo "❌ .env.autoが見つかりません。'make env-load'を実行してください"; \
+		exit 1; \
+	fi; \
+	if [ ! -d apps/web/prisma ]; then \
+		echo "❌ apps/web/prisma ディレクトリが見つかりません"; \
+		exit 1; \
+	fi; \
+	source .env && source .env.auto; \
+	POSTGRES_USER=$${POSTGRES_USER:-postgres}; \
+	echo "Database: kishax_web"; \
+	echo "User: $$POSTGRES_USER"; \
+	echo "Host: 127.0.0.1:5433"; \
+	echo ""; \
+	echo "⚠️  事前に別ターミナルで 'make ssm-postgres' を実行してください"; \
+	echo ""; \
+	read -p "Prismaマイグレーションを実行しますか？ (y/N): " answer; \
+	if [ "$$answer" != "y" ] && [ "$$answer" != "Y" ]; then \
+		echo "キャンセルしました"; \
+		exit 0; \
+	fi; \
+	echo ""; \
+	echo "🔧 Prismaマイグレーション実行中..."; \
+	ENCODED_PASSWORD=$$(python3 -c "import urllib.parse; print(urllib.parse.quote_plus('$$POSTGRES_PASSWORD'))"); \
+	cd apps/web && DATABASE_URL="postgresql://$$POSTGRES_USER:$$ENCODED_PASSWORD@127.0.0.1:5433/kishax_web" npx prisma db push --skip-generate; \
+	if [ $$? -eq 0 ]; then \
+		echo "✅ テーブルを作成しました"; \
+	else \
+		echo "❌ テーブル作成に失敗しました"; \
+		exit 1; \
+	fi
+
+postgres-seed-list: ## .db/web のシードファイル一覧を表示
 	@echo "📋 PostgreSQLシードファイル一覧:"
 	@echo ""
-	@if [ -d .bak/db/postgres ]; then \
-		ls -lh .bak/db/postgres/*.sql 2>/dev/null | awk '{print "  " $$9 " (" $$5 ")"}' || echo "  ファイルが見つかりません"; \
+	@if [ -d .db/web ]; then \
+		ls -lh .db/web/*.sql 2>/dev/null | awk '{print "  " $$9 " (" $$5 ")"}' || echo "  ファイルが見つかりません"; \
 	else \
-		echo "  ❌ .bak/db/postgres ディレクトリが存在しません"; \
+		echo "  ❌ .db/web ディレクトリが存在しません"; \
 	fi
 
 postgres-seed-import: ## 指定したシードファイルをRDS PostgreSQLに挿入 (要: make ssm-postgres)
@@ -865,7 +939,7 @@ postgres-seed-import: ## 指定したシードファイルをRDS PostgreSQLに�
 	if [ -z "$(FILE)" ]; then \
 		echo "❌ FILEパラメータを指定してください"; \
 		echo ""; \
-		echo "例: make postgres-seed-import FILE=.bak/db/postgres/users_migrated_seed.sql"; \
+		echo "例: make postgres-seed-import FILE=.db/web/users_migrated_seed.sql"; \
 		echo ""; \
 		$(MAKE) postgres-seed-list; \
 		exit 1; \
@@ -875,15 +949,17 @@ postgres-seed-import: ## 指定したシードファイルをRDS PostgreSQLに�
 		exit 1; \
 	fi; \
 	source .env && source .env.auto; \
+	POSTGRES_USER=$${POSTGRES_USER:-postgres}; \
 	echo "ファイル: $(FILE)"; \
 	echo "Database: kishax_web"; \
+	echo "User: $$POSTGRES_USER"; \
 	echo "Host: localhost:5433"; \
 	echo ""; \
 	echo "⚠️  事前に別ターミナルで 'make ssm-postgres' を実行してください"; \
 	echo ""; \
 	read -p "このファイルをインポートしますか？ (y/N): " answer; \
 	if [ "$$answer" = "y" ] || [ "$$answer" = "Y" ]; then \
-		PGPASSWORD="$$POSTGRES_PASSWORD" psql -h 127.0.0.1 -p 5433 -U postgres -d kishax_web -f "$(FILE)"; \
+		PGPASSWORD="$$POSTGRES_PASSWORD" psql -h 127.0.0.1 -p 5433 -U "$$POSTGRES_USER" -d kishax_web -f "$(FILE)"; \
 		echo ""; \
 		echo "✅ インポート完了"; \
 	else \
@@ -891,7 +967,7 @@ postgres-seed-import: ## 指定したシードファイルをRDS PostgreSQLに�
 	fi
 
 postgres-seed-users: ## ユーザー情報をインポート (要: make ssm-postgres)
-	@$(MAKE) postgres-seed-import FILE=.bak/db/postgres/users_migrated_seed.sql
+	@$(MAKE) postgres-seed-import FILE=.db/web/users_migrated_seed.sql
 
 postgres-seed-reset: ## kishax_web データベースの全テーブルを削除 (要: make ssm-postgres)
 	@echo "🗑️  PostgreSQL データベースをリセットします"
@@ -901,7 +977,9 @@ postgres-seed-reset: ## kishax_web データベースの全テーブルを削除
 		exit 1; \
 	fi; \
 	source .env && source .env.auto; \
+	POSTGRES_USER=$${POSTGRES_USER:-postgres}; \
 	echo "Database: kishax_web"; \
+	echo "User: $$POSTGRES_USER"; \
 	echo "Host: localhost:5433"; \
 	echo ""; \
 	echo "⚠️  事前に別ターミナルで 'make ssm-postgres' を実行してください"; \
@@ -914,7 +992,7 @@ postgres-seed-reset: ## kishax_web データベースの全テーブルを削除
 	fi; \
 	echo ""; \
 	echo "🗑️  テーブル削除中..."; \
-	PGPASSWORD="$$POSTGRES_PASSWORD" psql -h 127.0.0.1 -p 5433 -U postgres -d kishax_web -c " \
+	PGPASSWORD="$$POSTGRES_PASSWORD" psql -h 127.0.0.1 -p 5433 -U "$$POSTGRES_USER" -d kishax_web -c " \
 		DO \$\$ DECLARE \
 			r RECORD; \
 		BEGIN \
@@ -927,20 +1005,20 @@ postgres-seed-reset: ## kishax_web データベースの全テーブルを削除
 	echo "✅ データベースをリセットしました"; \
 	echo "💡 テーブルを再作成するには、マイグレーションを実行してください"
 
-postgres-seed-all: ## .bak/db/postgres の全シードファイルを一括インポート (要: make ssm-postgres)
+postgres-seed-all: ## .db/web の全シードファイルを一括インポート (要: make ssm-postgres)
 	@echo "📥 PostgreSQL 全シードファイルを一括インポートします"
 	@echo ""
 	@if [ ! -f .env.auto ]; then \
 		echo "❌ .env.autoが見つかりません。'make env-load'を実行してください"; \
 		exit 1; \
 	fi; \
-	if [ ! -d .bak/db/postgres ]; then \
-		echo "❌ .bak/db/postgres ディレクトリが存在しません"; \
+	if [ ! -d .db/web ]; then \
+		echo "❌ .db/web ディレクトリが存在しません"; \
 		exit 1; \
 	fi; \
-	FILE_COUNT=$$(ls -1 .bak/db/postgres/*.sql 2>/dev/null | wc -l | tr -d ' '); \
+	FILE_COUNT=$$(ls -1 .db/web/*.sql 2>/dev/null | wc -l | tr -d ' '); \
 	if [ "$$FILE_COUNT" -eq 0 ]; then \
-		echo "❌ .bak/db/postgres にSQLファイルが見つかりません"; \
+		echo "❌ .db/web にSQLファイルが見つかりません"; \
 		exit 1; \
 	fi; \
 	source .env && source .env.auto; \
@@ -949,13 +1027,14 @@ postgres-seed-all: ## .bak/db/postgres の全シードファイルを一括イ�
 		echo "💡 'source .env && source .env.auto' を実行してください"; \
 		exit 1; \
 	fi; \
+	POSTGRES_USER=$${POSTGRES_USER:-postgres}; \
 	echo "対象ファイル数: $$FILE_COUNT"; \
 	echo "Database: kishax_web"; \
 	echo "Host: localhost:5433"; \
-	echo "User: postgres"; \
+	echo "User: $$POSTGRES_USER"; \
 	echo ""; \
 	echo "🔍 PostgreSQL接続確認中..."; \
-	CONNECTION_TEST=$$(PGPASSWORD="$$POSTGRES_PASSWORD" psql -h 127.0.0.1 -p 5433 -U postgres -d kishax_web -c "SELECT 1" 2>&1); \
+	CONNECTION_TEST=$$(PGPASSWORD="$$POSTGRES_PASSWORD" psql -h 127.0.0.1 -p 5433 -U "$$POSTGRES_USER" -d kishax_web -c "SELECT 1" 2>&1); \
 	if [ $$? -ne 0 ]; then \
 		echo "❌ PostgreSQLに接続できません"; \
 		echo ""; \
@@ -971,17 +1050,22 @@ postgres-seed-all: ## .bak/db/postgres の全シードファイルを一括イ�
 		echo ""; \
 		echo "🔍 デバッグ情報:"; \
 		echo "   - ポート確認: lsof -i :5433"; \
-		echo "   - 手動接続: PGPASSWORD=*** psql -h 127.0.0.1 -p 5433 -U postgres -d kishax_web"; \
+		echo "   - 手動接続: PGPASSWORD=*** psql -h 127.0.0.1 -p 5433 -U $$POSTGRES_USER -d kishax_web"; \
 		echo ""; \
 		exit 1; \
 	fi; \
 	echo "✅ PostgreSQL接続成功"; \
 	echo ""; \
 	echo "📋 対象ファイル一覧:"; \
-	ls -1h .bak/db/postgres/*.sql | while read file; do \
-		SIZE=$$(ls -lh "$$file" | awk '{print $$5}'); \
-		echo "  - $$(basename $$file) ($$SIZE)"; \
+	ls -1h .db/web/*.sql | while read file; do \
+		FILE_NAME=$$(basename "$$file"); \
+		if ! echo "$$FILE_NAME" | grep -q "^counter_"; then \
+			SIZE=$$(ls -lh "$$file" | awk '{print $$5}'); \
+			echo "  - $$FILE_NAME ($$SIZE)"; \
+		fi; \
 	done; \
+	echo ""; \
+	echo "💡 counter_*.sql はスキップされます（スキーマ互換性なし）"; \
 	echo ""; \
 	read -p "全てのファイルをインポートしますか？ (y/N): " answer; \
 	if [ "$$answer" != "y" ] && [ "$$answer" != "Y" ]; then \
@@ -993,13 +1077,20 @@ postgres-seed-all: ## .bak/db/postgres の全シードファイルを一括イ�
 	echo ""; \
 	SUCCESS_COUNT=0; \
 	FAIL_COUNT=0; \
+	SKIP_COUNT=0; \
 	FAILED_FILES=""; \
-	for sql_file in .bak/db/postgres/*.sql; do \
+	for sql_file in .db/web/*.sql; do \
 		if [ -f "$$sql_file" ]; then \
-			FILE_NAME=$$(basename "$$sql_file"); \
-			FILE_SIZE=$$(ls -lh "$$sql_file" | awk '{print $$5}'); \
-			echo "📄 [$$((SUCCESS_COUNT + FAIL_COUNT + 1))/$$FILE_COUNT] $$FILE_NAME ($$FILE_SIZE)..."; \
-			ERROR_MSG=$$(PGPASSWORD="$$POSTGRES_PASSWORD" psql -h 127.0.0.1 -p 5433 -U postgres -d kishax_web -f "$$sql_file" 2>&1); \
+		FILE_NAME=$$(basename "$$sql_file"); \
+		if echo "$$FILE_NAME" | grep -q "^counter_"; then \
+			echo "⏭️  [$$((SUCCESS_COUNT + FAIL_COUNT + SKIP_COUNT + 1))/$$FILE_COUNT] $$FILE_NAME - スキップ (互換性なし)"; \
+			SKIP_COUNT=$$((SKIP_COUNT + 1)); \
+			echo ""; \
+			continue; \
+		fi; \
+		FILE_SIZE=$$(ls -lh "$$sql_file" | awk '{print $$5}'); \
+		echo "📄 [$$((SUCCESS_COUNT + FAIL_COUNT + SKIP_COUNT + 1))/$$FILE_COUNT] $$FILE_NAME ($$FILE_SIZE)..."; \
+		ERROR_MSG=$$(PGPASSWORD="$$POSTGRES_PASSWORD" psql -h 127.0.0.1 -p 5433 -U "$$POSTGRES_USER" -d kishax_web -f "$$sql_file" 2>&1); \
 			if [ $$? -eq 0 ]; then \
 				echo "   ✅ 成功"; \
 				SUCCESS_COUNT=$$((SUCCESS_COUNT + 1)); \
@@ -1020,13 +1111,18 @@ postgres-seed-all: ## .bak/db/postgres の全シードファイルを一括イ�
 	echo "========================================"; \
 	echo "✅ 成功: $$SUCCESS_COUNT / $$FILE_COUNT"; \
 	echo "❌ 失敗: $$FAIL_COUNT / $$FILE_COUNT"; \
+	echo "⏭️  スキップ: $$SKIP_COUNT / $$FILE_COUNT"; \
 	echo "========================================"; \
 	if [ $$FAIL_COUNT -gt 0 ]; then \
 		echo ""; \
 		echo "⚠️  失敗したファイル:"; \
 		echo -e "$$FAILED_FILES"; \
 		echo "💡 個別に確認するには:"; \
-		echo "   make postgres-seed-import FILE=.bak/db/postgres/[ファイル名]"; \
+		echo "   make postgres-seed-import FILE=.db/web/[ファイル名]"; \
+	fi; \
+	if [ $$SKIP_COUNT -gt 0 ]; then \
+		echo ""; \
+		echo "💡 スキップされたファイルは互換性がないため除外されました"; \
 	fi
 
 ## =============================================================================

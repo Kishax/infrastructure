@@ -196,3 +196,144 @@ resource "aws_s3_bucket_policy" "image_maps" {
     ]
   })
 }
+
+# ============================================================================
+# World Backups S3 Bucket (永続保存 - バックアップ・VM展開・移植作業用)
+# ============================================================================
+
+# S3 Bucket for Minecraft World Backups
+resource "aws_s3_bucket" "world_backups" {
+  bucket = "kishax-${var.environment}-world-backups"
+
+  tags = {
+    Name        = "kishax-${var.environment}-world-backups"
+    Environment = var.environment
+    Purpose     = "Minecraft world backups, VM deployment, migration work"
+  }
+}
+
+# Block all public access
+resource "aws_s3_bucket_public_access_block" "world_backups" {
+  bucket = aws_s3_bucket.world_backups.id
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+# Enable versioning
+resource "aws_s3_bucket_versioning" "world_backups" {
+  bucket = aws_s3_bucket.world_backups.id
+
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+
+# Server-side encryption
+resource "aws_s3_bucket_server_side_encryption_configuration" "world_backups" {
+  bucket = aws_s3_bucket.world_backups.id
+
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "AES256"
+    }
+  }
+}
+
+# Lifecycle rule - keep backups for 180 days
+resource "aws_s3_bucket_lifecycle_configuration" "world_backups" {
+  bucket = aws_s3_bucket.world_backups.id
+
+  rule {
+    id     = "delete-old-backups"
+    status = "Enabled"
+
+    filter {
+      prefix = "backups/"
+    }
+
+    expiration {
+      days = 180
+    }
+
+    noncurrent_version_expiration {
+      noncurrent_days = 30
+    }
+  }
+
+  # VM展開・移植作業用のデータは削除しない
+  rule {
+    id     = "keep-deployment-data"
+    status = "Enabled"
+
+    filter {
+      prefix = "deployment/"
+    }
+
+    # 削除しない（expirationを設定しない）
+  }
+
+  # マイグレーション用のデータは90日で削除
+  rule {
+    id     = "delete-old-migration-data"
+    status = "Enabled"
+
+    filter {
+      prefix = "migration/"
+    }
+
+    expiration {
+      days = 90
+    }
+
+    noncurrent_version_expiration {
+      noncurrent_days = 30
+    }
+  }
+}
+
+# Bucket policy to allow access from MC Server (i-a)
+resource "aws_s3_bucket_policy" "world_backups" {
+  bucket = aws_s3_bucket.world_backups.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "AllowMCServerAccess"
+        Effect = "Allow"
+        Principal = {
+          AWS = var.ec2_instance_role_arns
+        }
+        Action = [
+          "s3:GetObject",
+          "s3:PutObject",
+          "s3:DeleteObject",
+          "s3:HeadObject",
+          "s3:ListBucket"
+        ]
+        Resource = [
+          aws_s3_bucket.world_backups.arn,
+          "${aws_s3_bucket.world_backups.arn}/*"
+        ]
+      },
+      {
+        Sid    = "DenyInsecureTransport"
+        Effect = "Deny"
+        Principal = "*"
+        Action = "s3:*"
+        Resource = [
+          aws_s3_bucket.world_backups.arn,
+          "${aws_s3_bucket.world_backups.arn}/*"
+        ]
+        Condition = {
+          Bool = {
+            "aws:SecureTransport" = "false"
+          }
+        }
+      }
+    ]
+  })
+}

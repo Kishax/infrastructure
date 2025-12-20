@@ -8,7 +8,7 @@ terraform {
     region         = "ap-northeast-1"
     encrypt        = true
     dynamodb_table = "kishax-terraform-locks"
-    
+
     # プロファイル指定（ローカル開発用）
     # CI/CD環境ではIAMロールを使用
     profile = "AdministratorAccess-126112056177"

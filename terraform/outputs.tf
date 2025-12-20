@@ -152,3 +152,13 @@ output "s3_vpc_endpoint_id" {
   description = "S3 VPC Endpoint ID"
   value       = module.vpc.s3_vpc_endpoint_id
 }
+
+output "s3_world_backups_bucket_name" {
+  description = "S3 bucket name for world backups"
+  value       = module.s3.world_backups_bucket_name
+}
+
+output "s3_world_backups_bucket_arn" {
+  description = "S3 bucket ARN for world backups"
+  value       = module.s3.world_backups_bucket_arn
+}

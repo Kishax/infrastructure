@@ -74,7 +74,7 @@ resource "aws_db_instance" "mysql" {
 
   # Engine
   engine         = "mysql"
-  engine_version = "8.0.40"  # 利用可能な最新安定版
+  engine_version = "8.0.42"  # 利用可能な最新安定版
 
   # Instance
   instance_class        = var.mysql_instance_class

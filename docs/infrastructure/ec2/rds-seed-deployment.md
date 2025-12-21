@@ -469,7 +469,34 @@ make postgres-seed-all
 
 ### PostgreSQLシード挿入手順
 
+**重要**: シードデータ挿入前に、必ず Prisma Migrate でスキーマを最新化してください。
+
 #### 方法1: Makefileコマンドを使用（推奨）
+
+##### 0. Prisma Migrateでスキーマを最新化（必須）
+
+シードデータを挿入する前に、PostgreSQLのスキーマを最新化します：
+
+```bash
+# i-c (Web Server) で実行
+docker exec kishax-web npx prisma migrate deploy
+```
+
+**このコマンドは以下を実行します：**
+- `user_products`, `products` など、Prisma schemaで定義された全テーブルを作成
+- 既存のマイグレーションファイル（`prisma/migrations/`）を適用
+- Auth API で必要なテーブルが確実に存在するようになる
+
+**出力例:**
+```
+Prisma Migrate deployed successfully
+✓ Applied 3 migrations in 234ms
+  ✓ 20250101000000_init
+  ✓ 20250115000000_add_products
+  ✓ 20250120000000_add_minecraft_players
+```
+
+**注意**: `make postgres-seed-all` は自動的にこのステップを実行しますが、個別にシードを挿入する場合は、必ず事前に実行してください。
 
 ##### 1. 全シードファイルの一括挿入（推奨）
 
@@ -480,6 +507,10 @@ make postgres-seed-all
 make postgres-seed-all
 ```
 
+**このコマンドは以下を実行します：**
+1. **Prisma Migrate** でスキーマを最新化
+2. `.db/web/*.sql` の全シードファイルをインポート
+
 **出力例:**
 ```
 📥 PostgreSQL 全シードファイルを一括インポートします
@@ -487,6 +518,9 @@ make postgres-seed-all
 対象ファイル数: 1
 Database: kishax_web
 Host: localhost:5433
+
+🔄 Prisma Migrateを実行してスキーマを最新化します...
+✅ Prisma Migrate完了
 
 📋 対象ファイル一覧:
   - users_migrated_seed.sql (数KB)

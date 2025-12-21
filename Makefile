@@ -1012,7 +1012,7 @@ postgres-seed-reset: ## kishax_web データベースの全テーブルを削除
 	echo "✅ データベースをリセットしました"; \
 	echo "💡 テーブルを再作成するには、マイグレーションを実行してください"
 
-postgres-seed-all: ## .db/web の全シードファイルを一括インポート (要: make ssm-postgres)
+postgres-seed-all: ## .db/web の全シードファイルを一括インポート + Prisma Migrate実行 (要: make ssm-postgres)
 	@echo "📥 PostgreSQL 全シードファイルを一括インポートします"
 	@echo ""
 	@if [ ! -f .env.auto ]; then \
@@ -1062,6 +1062,21 @@ postgres-seed-all: ## .db/web の全シードファイルを一括インポー�
 		exit 1; \
 	fi; \
 	echo "✅ PostgreSQL接続成功"; \
+	echo ""; \
+	echo "🔄 Prisma Migrateを実行してスキーマを最新化します..."; \
+	echo ""; \
+	if [ -d apps/web ]; then \
+		cd apps/web && DATABASE_URL="postgresql://$$POSTGRES_USER:$$POSTGRES_PASSWORD@127.0.0.1:5433/kishax_web?schema=public" npx prisma migrate deploy; \
+		if [ $$? -eq 0 ]; then \
+			echo "✅ Prisma Migrate完了"; \
+		else \
+			echo "❌ Prisma Migrateに失敗しました"; \
+			exit 1; \
+		fi; \
+		cd ../..; \
+	else \
+		echo "⚠️  apps/web ディレクトリが見つかりません。Prisma Migrateをスキップします"; \
+	fi; \
 	echo ""; \
 	echo "📋 対象ファイル一覧:"; \
 	ls -1h .db/web/*.sql | while read file; do \

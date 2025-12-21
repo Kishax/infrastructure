@@ -81,7 +81,63 @@ aws sts get-caller-identity --profile AdministratorAccess-126112056177
 
 ## 方法1: ローカルビルド → S3経由転送（推奨）
 
+### 🚀 クイックスタート（Makeコマンド使用）
+
+**最も簡単な方法**: 以下の2つのコマンドを実行するだけです。
+
+```bash
+# ===== ローカルマシンで実行 =====
+cd /Users/tk/git/Kishax/infrastructure
+
+# 最新コードを取得
+git pull origin infra/migrate-to-ec2
+
+# 環境変数を読み込む（初回のみ）
+make env-load
+source .env && source .env.auto
+
+# ビルド → S3アップロード（自動）
+make deploy-mc-to-s3
+```
+
+```bash
+# ===== EC2 (i-a: MC Server) で実行 =====
+# ローカルから接続
+make ssh-mc
+
+# S3からダウンロード → Dockerコンテナにコピー → 再起動（自動）
+make deploy-mc
+```
+
+**これで完了！** 以下は詳細手順です。
+
+---
+
 ### ステップ1: コードの最新化とビルド
+
+#### 方法A: Makeコマンド（推奨）
+
+```bash
+# ローカルマシンで実行
+cd /Users/tk/git/Kishax/infrastructure
+
+# 最新コードを取得
+git pull origin infra/migrate-to-ec2
+
+# 環境変数を読み込む（初回のみ必要）
+make env-load
+source .env && source .env.auto
+
+# ビルド → S3アップロード（自動）
+make deploy-mc-to-s3
+```
+
+**このコマンドは自動的に以下を実行します：**
+1. `./gradlew build -x test` でプラグインをビルド
+2. Spigot 1.21.8/1.21.11 と Velocity をS3にアップロード
+3. アップロード確認
+
+#### 方法B: 手動実行
 
 ```bash
 # ローカルマシンで実行
@@ -106,41 +162,40 @@ apps/mc/spigot/sv1_21_11/build/libs/Kishax-Spigot-1.21.11.jar
 apps/mc/velocity/build/libs/Kishax-Velocity-3.4.0.jar
 ```
 
-### ステップ2: ビルド成果物をS3にアップロード
+---
+
+### ステップ2: EC2でS3からダウンロードしてデプロイ
+
+#### 方法A: Makeコマンド（推奨）
 
 ```bash
-# ローカルマシンで実行
-cd /Users/tk/git/Kishax/infrastructure/apps/mc
-
-# S3バケット名を取得
-cd ../../terraform
-export S3_BUCKET=$(terraform output -raw s3_docker_images_bucket_name)
-echo "S3 Bucket: $S3_BUCKET"
-
-# プラグインをS3にアップロード
-cd ../apps/mc
-
-# Spigot 1.21.8
-aws s3 cp spigot/sv1_21_8/build/libs/Kishax-Spigot-1.21.8.jar \
-  s3://${S3_BUCKET}/mc-plugins/Kishax-Spigot-1.21.8.jar \
-  --profile AdministratorAccess-126112056177
-
-# Spigot 1.21.11
-aws s3 cp spigot/sv1_21_11/build/libs/Kishax-Spigot-1.21.11.jar \
-  s3://${S3_BUCKET}/mc-plugins/Kishax-Spigot-1.21.11.jar \
-  --profile AdministratorAccess-126112056177
-
-# Velocity
-aws s3 cp velocity/build/libs/Kishax-Velocity-3.4.0.jar \
-  s3://${S3_BUCKET}/mc-plugins/Kishax-Velocity-3.4.0.jar \
-  --profile AdministratorAccess-126112056177
-
-# アップロード確認
-aws s3 ls s3://${S3_BUCKET}/mc-plugins/ \
-  --profile AdministratorAccess-126112056177
+# ローカルマシンから i-a (MC Server) に接続
+make ssh-mc
 ```
 
-### ステップ3: EC2でS3からダウンロードしてデプロイ
+```bash
+# i-a (MC Server) 上で実行
+
+# MCプラグインディレクトリに移動
+cd /home/ubuntu/infrastructure/apps/mc
+
+# S3からダウンロード → Dockerコンテナにコピー → 再起動（自動）
+make deploy-mc
+```
+
+**このコマンドは自動的に以下を実行します：**
+1. S3から最新プラグインをダウンロード
+2. Dockerコンテナ (`kishax-minecraft`) にコピー
+3. 全サーバーを正常終了（stop/end コマンド）
+4. `screen -wipe` でDeadセッションをクリーンアップ
+5. `docker restart kishax-minecraft` でコンテナ再起動
+6. サーバーステータスを表示
+
+**完了！** 以下は手動実行の詳細手順です。
+
+#### 方法B: 手動実行
+
+##### ステップ2-1: EC2に接続
 
 ```bash
 # ローカルマシンから i-a (MC Server) に接続
@@ -150,6 +205,8 @@ aws ssm start-session \
   --profile AdministratorAccess-126112056177 \
   --target $(terraform -chdir=terraform output -raw instance_id_a)
 ```
+
+##### ステップ2-2: S3からダウンロード
 
 ```bash
 # i-a (MC Server) 上で実行
@@ -173,16 +230,9 @@ ls -lh *.jar
 docker cp Kishax-Velocity-3.4.0.jar kishax-minecraft:/mc/velocity/plugins/
 
 # 使用しているMinecraftバージョンに応じて選択
-# Spigot 1.21.8の場合
-docker cp Kishax-Spigot-1.21.8.jar kishax-minecraft:/mc/spigot/home/plugins/
-docker cp Kishax-Spigot-1.21.8.jar kishax-minecraft:/mc/spigot/latest/plugins/
-
-# または Spigot 1.21.11の場合
+# Spigot 1.21.11の場合（推奨）
 docker cp Kishax-Spigot-1.21.11.jar kishax-minecraft:/mc/spigot/home/plugins/
 docker cp Kishax-Spigot-1.21.11.jar kishax-minecraft:/mc/spigot/latest/plugins/
-
-# 他のサーバー（darumasan等）にも必要に応じてコピー
-# docker cp Kishax-Spigot-1.21.11.jar kishax-minecraft:/mc/spigot/darumasan/plugins/
 
 # コピー確認
 docker exec -it kishax-minecraft ls -lh /mc/velocity/plugins/Kishax-*.jar
@@ -194,12 +244,10 @@ cd ~
 rm -rf ~/mc-plugins-temp
 ```
 
-### ステップ4: サーバー再起動
+##### ステップ2-3: サーバー再起動
 
 **⚠️ 重要**: `docker restart` を直接使用すると、screenセッションが重複して "Dead" 状態になります。
 以下の手順で正しく再起動してください。
-
-#### 方法A: 個別にサーバーを停止してからリロード（推奨）
 
 ```bash
 # i-a (MC Server) 上で実行
@@ -209,7 +257,7 @@ docker exec -it kishax-minecraft screen -S home -X stuff "stop$(printf \\r)"
 docker exec -it kishax-minecraft screen -S latest -X stuff "stop$(printf \\r)"
 docker exec -it kishax-minecraft screen -S proxy -X stuff "end$(printf \\r)"
 
-# 2. サーバーの停止を待つ（30-60秒）
+# 2. サーバーの停止を待つ（45秒）
 echo "サーバー停止を待機中..."
 sleep 45
 

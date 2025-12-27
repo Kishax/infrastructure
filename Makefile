@@ -449,7 +449,7 @@ ssm-postgres: ## RDS PostgreSQL へポートフォワーディング (localhost:
 ## SSH接続（純粋なSSH - 事前に ssm-* でポートフォワーディングが必要）
 ## =============================================================================
 
-.PHONY: ssh-mc ssh-api ssh-web ssh-mysql ssh-postgres
+.PHONY: ssh-mc ssh-api ssh-web ssh-mysql ssh-postgres delete-user
 
 ssh-mc: ## i-a (MC Server) へSSH接続 (要: 別ターミナルで make ssm-mc)
 	@echo "🔗 MC Server (i-a) へSSH接続します..."
@@ -553,6 +553,74 @@ ssh-postgres: ## RDS PostgreSQL へpsql接続 (要: 別ターミナルで make s
 	echo "⚠️  事前に別ターミナルで 'make ssm-postgres' を実行してください"; \
 	echo ""; \
 	PGPASSWORD="$$POSTGRES_PASSWORD" psql -h 127.0.0.1 -p 5433 -U "$$POSTGRES_USER" -d kishax_web
+
+delete-user: ## 指定ユーザーをMySQL/PostgreSQLから削除 (要: make ssm-mysql & make ssm-postgres)
+	@echo "🗑️  ユーザーデータを削除します"
+	@echo ""
+	@if [ ! -f .env.auto ]; then \
+		echo "❌ .env.autoが見つかりません。'make env-load'を実行してください"; \
+		exit 1; \
+	fi; \
+	source .env && source .env.auto; \
+	if [ -z "$(MCID)" ]; then \
+		echo "❌ MCIDを指定してください"; \
+		echo "💡 使用方法: make delete-user MCID=takaya_maekawa"; \
+		exit 1; \
+	fi; \
+	echo "削除対象ユーザー: $(MCID)"; \
+	echo ""; \
+	echo "⚠️  事前に以下を確認してください:"; \
+	echo "   - 別ターミナルで 'make ssm-mysql' が実行中"; \
+	echo "   - 別ターミナルで 'make ssm-postgres' が実行中"; \
+	echo ""; \
+	echo "🔍 データ確認中..."; \
+	echo ""; \
+	echo "PostgreSQL: 接続情報"; \
+	PGPASSWORD="$$POSTGRES_PASSWORD" psql -h 127.0.0.1 -p 5433 -U "$$POSTGRES_USER" -d kishax_main \
+		-c "\conninfo" 2>&1; \
+	echo ""; \
+	echo "PostgreSQL: kishax_mainのテーブル一覧"; \
+	PGPASSWORD="$$POSTGRES_PASSWORD" psql -h 127.0.0.1 -p 5433 -U "$$POSTGRES_USER" -d kishax_main \
+		-c "\dt" 2>&1; \
+	echo ""; \
+	echo "PostgreSQL: minecraft_playersテーブルの全レコード"; \
+	PGPASSWORD="$$POSTGRES_PASSWORD" psql -h 127.0.0.1 -p 5433 -U "$$POSTGRES_USER" -d kishax_main \
+		-c "SELECT * FROM minecraft_players LIMIT 10" 2>&1; \
+	echo ""; \
+	echo "MySQL (members):"; \
+	mysql -h 127.0.0.1 -P 3307 -u "$$MYSQL_USER" -p"$$MYSQL_PASSWORD" kishax_mc \
+		-e "SELECT id, name, uuid FROM members WHERE name='$(MCID)'" 2>&1 | grep -v "Using a password on the command line" || true; \
+	echo ""; \
+	echo "PostgreSQL (minecraft_players):"; \
+	PGPASSWORD="$$POSTGRES_PASSWORD" psql -h 127.0.0.1 -p 5433 -U "$$POSTGRES_USER" -d kishax_main \
+		-c "SELECT id, mcid, uuid FROM minecraft_players WHERE mcid='$(MCID)'" 2>&1; \
+	echo ""; \
+	echo "削除対象:"; \
+	echo "   - MySQL: kishax_mc.members (name='$(MCID)')"; \
+	echo "   - PostgreSQL: kishax_main.minecraft_players (mcid='$(MCID)')"; \
+	echo ""; \
+	read -p "本当に削除しますか？ (yes/N): " answer; \
+	if [ "$$answer" != "yes" ]; then \
+		echo "キャンセルしました"; \
+		exit 0; \
+	fi; \
+	echo ""; \
+	echo "🗑️  MySQL: members から削除中..."; \
+	mysql -h 127.0.0.1 -P 3307 -u "$$MYSQL_USER" -p"$$MYSQL_PASSWORD" kishax_mc \
+		-e "DELETE FROM members WHERE name='$(MCID)'" 2>&1 | grep -v "Using a password on the command line" || true; \
+	MYSQL_ROWS=$$(mysql -h 127.0.0.1 -P 3307 -u "$$MYSQL_USER" -p"$$MYSQL_PASSWORD" kishax_mc \
+		-se "SELECT ROW_COUNT()" 2>&1 | grep -v "Using a password on the command line"); \
+	echo "   削除件数: $$MYSQL_ROWS 件"; \
+	echo ""; \
+	echo "🗑️  PostgreSQL: minecraft_players から削除中..."; \
+	PGPASSWORD="$$POSTGRES_PASSWORD" psql -h 127.0.0.1 -p 5433 -U "$$POSTGRES_USER" -d kishax_main \
+		-c "DELETE FROM minecraft_players WHERE mcid='$(MCID)'" 2>&1; \
+	echo ""; \
+	echo "✅ 削除完了"; \
+	echo ""; \
+	echo "💡 削除確認:"; \
+	echo "   MySQL:      make ssh-mysql → SELECT * FROM members WHERE name='$(MCID)';"; \
+	echo "   PostgreSQL: make ssh-postgres → SELECT * FROM minecraft_players WHERE mcid='$(MCID)';"
 
 ## =============================================================================
 ## MySQL シード管理

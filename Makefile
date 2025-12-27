@@ -279,7 +279,7 @@ ec2-stop-jump: ## i-d (Jump Server)を停止
 ## SSM接続（ポートフォワーディング - このターミナルを占有）
 ## =============================================================================
 
-.PHONY: ssm-mc ssm-api ssm-web ssm-jump ssm-mysql ssm-postgres
+.PHONY: ssm-mc ssm-api ssm-web ssm-jump ssm-mysql ssm-postgres ssm-start-all ssm-stop-all ssm-status
 
 ssm-mc: ## i-a (MC Server) へポートフォワーディング (localhost:2222)
 	@echo "🔗 MC Server (i-a) へポートフォワーディングを開始します..."
@@ -444,6 +444,15 @@ ssm-postgres: ## RDS PostgreSQL へポートフォワーディング (localhost:
 		--document-name AWS-StartPortForwardingSessionToRemoteHost \
 		--parameters "{\"host\":[\"$$RDS_POSTGRES_HOST\"],\"portNumber\":[\"$$RDS_POSTGRES_PORT\"],\"localPortNumber\":[\"5433\"]}" \
 		--profile $(AWS_PROFILE)
+
+ssm-start-all: ## 全てのポートフォワーディングを一括起動（バックグラウンド）
+	@bash scripts/start-all-port-forwarding.sh
+
+ssm-stop-all: ## 全てのポートフォワーディングを一括停止
+	@bash scripts/stop-all-port-forwarding.sh
+
+ssm-status: ## ポートフォワーディングの状態を確認
+	@bash scripts/status-port-forwarding.sh
 
 ## =============================================================================
 ## SSH接続（純粋なSSH - 事前に ssm-* でポートフォワーディングが必要）

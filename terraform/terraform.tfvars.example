@@ -1,0 +1,34 @@
+# Kishax Infrastructure - Variables Example
+# Copy this file to terraform.tfvars and fill in your values
+
+aws_region  = "ap-northeast-1"
+aws_profile = "AdministratorAccess-126112056177"
+environment = "production"
+
+# VPC
+vpc_cidr = "10.0.0.0/16"
+
+# Route53
+route53_zone_id = "Z0123456789ABCDEFGHIJ"  # Replace with your hosted zone ID
+mc_domain_name  = "mc.kishax.net"
+web_domain_name = "kishax.net"  # Root domain or subdomain
+
+# RDS PostgreSQL
+postgres_instance_class    = "db.t4g.micro"
+postgres_allocated_storage = 20
+postgres_db_name           = "kishax_main"
+postgres_username          = "postgres"
+postgres_password          = "CHANGE_ME_SECURE_PASSWORD"
+
+# RDS MySQL
+mysql_instance_class    = "db.t4g.micro"
+mysql_allocated_storage = 20
+mysql_db_name           = "kishax_mc"
+mysql_username          = "mysql"
+mysql_password          = "CHANGE_ME_SECURE_PASSWORD"
+
+# CloudFront
+acm_certificate_arn = "arn:aws:acm:us-east-1:123456789012:certificate/xxxxx"  # us-east-1 required
+
+# EC2
+ec2_key_pair_name = "kishax-ec2-key"

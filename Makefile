@@ -480,15 +480,11 @@ ssh-mc: ## i-a (MC Server) へSSH接続 (要: 別ターミナルで make ssm-mc)
 	echo ""; \
 	echo "⚠️  事前に別ターミナルで 'make ssm-mc' を実行してください"; \
 	echo ""; \
-	if grep -q "\[localhost\]:2222" ~/.ssh/known_hosts 2>/dev/null; then \
-		echo "⚠️  known_hostsに[localhost]:2222のエントリが存在します"; \
-		read -p "削除しますか？ (y/N): " answer; \
-		if [ "$$answer" = "y" ] || [ "$$answer" = "Y" ]; then \
-			ssh-keygen -R "[localhost]:2222" 2>/dev/null || true; \
-			echo "✅ known_hostsから削除しました"; \
-		fi; \
-	fi; \
-	ssh -i $(SSH_KEY) -p 2222 ec2-user@localhost
+	ssh -i $(SSH_KEY) -p 2222 \
+		-o StrictHostKeyChecking=no \
+		-o UserKnownHostsFile=/dev/null \
+		-o LogLevel=ERROR \
+		ec2-user@localhost
 
 ssh-api: ## i-b (API Server) へSSH接続 (要: 別ターミナルで make ssm-api)
 	@echo "🔗 API Server (i-b) へSSH接続します..."
@@ -501,15 +497,11 @@ ssh-api: ## i-b (API Server) へSSH接続 (要: 別ターミナルで make ssm-a
 	echo ""; \
 	echo "⚠️  事前に別ターミナルで 'make ssm-api' を実行してください"; \
 	echo ""; \
-	if grep -q "\[localhost\]:2223" ~/.ssh/known_hosts 2>/dev/null; then \
-		echo "⚠️  known_hostsに[localhost]:2223のエントリが存在します"; \
-		read -p "削除しますか？ (y/N): " answer; \
-		if [ "$$answer" = "y" ] || [ "$$answer" = "Y" ]; then \
-			ssh-keygen -R "[localhost]:2223" 2>/dev/null || true; \
-			echo "✅ known_hostsから削除しました"; \
-		fi; \
-	fi; \
-	ssh -i $(SSH_KEY) -p 2223 ec2-user@localhost
+	ssh -i $(SSH_KEY) -p 2223 \
+		-o StrictHostKeyChecking=no \
+		-o UserKnownHostsFile=/dev/null \
+		-o LogLevel=ERROR \
+		ec2-user@localhost
 
 ssh-web: ## i-c (Web Server) へSSH接続 (要: 別ターミナルで make ssm-web)
 	@echo "🔗 Web Server (i-c) へSSH接続します..."
@@ -522,15 +514,11 @@ ssh-web: ## i-c (Web Server) へSSH接続 (要: 別ターミナルで make ssm-w
 	echo ""; \
 	echo "⚠️  事前に別ターミナルで 'make ssm-web' を実行してください"; \
 	echo ""; \
-	if grep -q "\[localhost\]:2224" ~/.ssh/known_hosts 2>/dev/null; then \
-		echo "⚠️  known_hostsに[localhost]:2224のエントリが存在します"; \
-		read -p "削除しますか？ (y/N): " answer; \
-		if [ "$$answer" = "y" ] || [ "$$answer" = "Y" ]; then \
-			ssh-keygen -R "[localhost]:2224" 2>/dev/null || true; \
-			echo "✅ known_hostsから削除しました"; \
-		fi; \
-	fi; \
-	ssh -i $(SSH_KEY) -p 2224 ec2-user@localhost
+	ssh -i $(SSH_KEY) -p 2224 \
+		-o StrictHostKeyChecking=no \
+		-o UserKnownHostsFile=/dev/null \
+		-o LogLevel=ERROR \
+		ec2-user@localhost
 
 ssh-mysql: ## RDS MySQL へMySQL接続 (要: 別ターミナルで make ssm-mysql)
 	@echo "🔗 RDS MySQL へMySQL接続します..."

@@ -279,7 +279,7 @@ ec2-stop-jump: ## i-d (Jump Server)を停止
 ## SSM接続（ポートフォワーディング - このターミナルを占有）
 ## =============================================================================
 
-.PHONY: ssm-mc ssm-api ssm-web ssm-jump ssm-mysql ssm-postgres ssm-start-all ssm-stop-all ssm-status
+.PHONY: ssm-mc ssm-api ssm-web ssm-jump ssm-mysql ssm-postgres ssm-start-all ssm-stop-all ssm-status ssm-start-all-tmux ssm-stop-all-tmux ssm-check
 
 ssm-mc: ## i-a (MC Server) へポートフォワーディング (localhost:2222)
 	@echo "🔗 MC Server (i-a) へポートフォワーディングを開始します..."
@@ -453,6 +453,15 @@ ssm-stop-all: ## 全てのポートフォワーディングを一括停止
 
 ssm-status: ## ポートフォワーディングの状態を確認
 	@bash scripts/status-port-forwarding.sh
+
+ssm-start-all-tmux: ## 全てのポートフォワーディングを一括起動（tmux版・推奨）
+	@bash scripts/start-all-port-forwarding-tmux.sh
+
+ssm-stop-all-tmux: ## 全てのポートフォワーディングを一括停止（tmux版）
+	@bash scripts/stop-all-port-forwarding-tmux.sh
+
+ssm-check: ## ポートとプロセスの詳細確認（デバッグ用）
+	@bash scripts/check-port-forwarding.sh
 
 ## =============================================================================
 ## SSH接続（純粋なSSH - 事前に ssm-* でポートフォワーディングが必要）

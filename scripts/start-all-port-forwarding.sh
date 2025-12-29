@@ -20,6 +20,16 @@ NC='\033[0m' # No Color
 echo -e "${BLUE}🚀 Kishax Infrastructure - 全ポートフォワーディング起動${NC}"
 echo ""
 
+# AWS認証確認
+echo -e "${BLUE}🔐 AWS認証確認中...${NC}"
+if ! aws sts get-caller-identity --profile "$AWS_PROFILE" >/dev/null 2>&1; then
+    echo -e "${RED}❌ AWS認証に失敗しました${NC}"
+    echo -e "${YELLOW}💡 以下のコマンドでログインしてください:${NC}"
+    echo -e "   aws sso login --profile $AWS_PROFILE"
+    exit 1
+fi
+echo -e "${GREEN}✅ AWS認証済み${NC}"
+
 # .env.autoをロード
 if [ -f .env.auto ]; then
     source .env.auto
@@ -112,6 +122,7 @@ start_port_forward() {
     local port=$3
     local local_port=$4
     local log_file="$LOG_DIR/ssm-${name}.log"
+    local script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
     
     if ! cleanup_port $local_port; then
         echo -e "${YELLOW}⏭️  $name のポートフォワーディングをスキップしました${NC}"
@@ -120,24 +131,63 @@ start_port_forward() {
     
     echo -e "${BLUE}🔗 $name (localhost:$local_port)${NC}"
     
-    # バックグラウンドでSSMセッションを開始
-    nohup aws ssm start-session \
-        --target "$INSTANCE_ID_D" \
-        --document-name AWS-StartPortForwardingSessionToRemoteHost \
-        --parameters "{\"host\":[\"$host\"],\"portNumber\":[\"$port\"],\"localPortNumber\":[\"$local_port\"]}" \
-        --profile "$AWS_PROFILE" \
-        > "$log_file" 2>&1 &
+    # ワーカースクリプトを使用してバックグラウンド実行
+    "$script_dir/ssm-port-forward-worker.sh" \
+        "$INSTANCE_ID_D" \
+        "$host" \
+        "$port" \
+        "$local_port" \
+        "$AWS_PROFILE" \
+        "$log_file" &
     
     local pid=$!
+    
     echo -e "   PID: $pid"
     echo -e "   Log: $log_file"
-    echo ""
     
     # PIDファイルに保存
     echo "$pid" >> "$LOG_DIR/pids.txt"
     
-    # 起動を少し待つ
-    sleep 2
+    # 起動を少し待つ（ポートがリッスンを開始するまで）
+    sleep 4
+    
+    # ポート接続確認
+    local max_retries=10
+    local retry_count=0
+    while [ $retry_count -lt $max_retries ]; do
+        if lsof -ti:$local_port >/dev/null 2>&1; then
+            echo -e "   ${GREEN}✅ ポート $local_port がリッスン中${NC}"
+            break
+        fi
+        
+        # プロセスがまだ存在するか確認
+        if ! kill -0 $pid 2>/dev/null; then
+            echo -e "   ${RED}❌ プロセスが終了しました${NC}"
+            echo -e "   ${YELLOW}💡 ログの内容:${NC}"
+            if [ -f "$log_file" ] && [ -s "$log_file" ]; then
+                tail -10 "$log_file" 2>/dev/null | sed 's/^/      /'
+            else
+                echo -e "      ${RED}(ログが空です - AWS Session Manager Pluginがインストールされているか確認してください)${NC}"
+            fi
+            break
+        fi
+        
+        retry_count=$((retry_count + 1))
+        if [ $retry_count -lt $max_retries ]; then
+            echo -e "   ${YELLOW}⏳ 待機中... ($retry_count/$max_retries)${NC}"
+            sleep 2
+        else
+            echo -e "   ${RED}⚠️  ポートのリッスンを確認できませんでした${NC}"
+            echo -e "   ${YELLOW}💡 ログの内容:${NC}"
+            if [ -f "$log_file" ] && [ -s "$log_file" ]; then
+                tail -10 "$log_file" 2>/dev/null | sed 's/^/      /'
+            else
+                echo -e "      ${RED}(ログが空です - プロセスが正常に起動していない可能性があります)${NC}"
+            fi
+        fi
+    done
+    
+    echo ""
 }
 
 # PIDファイルの初期化

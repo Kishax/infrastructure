@@ -84,8 +84,16 @@ echo ""
 PIDS=$(pgrep -f "aws ssm start-session.*AWS-StartPortForwardingSessionToRemoteHost" || true)
 
 if [ -n "$PIDS" ]; then
-    ps -p $PIDS -o pid,etime,command | head -n 1
-    ps -p $PIDS -o pid,etime,command | grep -v PID | grep -v grep || true
+    # macOSとLinuxの両方に対応
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        # macOS
+        ps -p $PIDS -o pid,etime,comm | head -n 1
+        ps -p $PIDS -o pid,etime,comm | grep -v PID || true
+    else
+        # Linux
+        ps -p $PIDS -o pid,etime,command | head -n 1
+        ps -p $PIDS -o pid,etime,command | grep -v PID || true
+    fi
 else
     echo -e "${YELLOW}  実行中のセッションはありません${NC}"
 fi
@@ -112,6 +120,13 @@ if [ -d "$LOG_DIR" ]; then
         echo ""
         echo -e "${BLUE}  最新のログファイル:${NC}"
         ls -lht "$LOG_DIR"/*.log 2>/dev/null | head -5 | awk '{print "    " $9 " (" $5 ", " $6 " " $7 " " $8 ")"}'
+        
+        echo ""
+        echo -e "${BLUE}  ログの最後の5行 (エラー確認用):${NC}"
+        for log_file in $(ls -t "$LOG_DIR"/*.log 2>/dev/null | head -3); do
+            echo -e "${YELLOW}    === $(basename $log_file) ===${NC}"
+            tail -5 "$log_file" 2>/dev/null | sed 's/^/      /' || echo "      (読み取り不可)"
+        done
     fi
 else
     echo -e "${YELLOW}📝 ログディレクトリは存在しません${NC}"

@@ -467,7 +467,7 @@ ssm-check: ## ポートとプロセスの詳細確認（デバッグ用）
 ## SSH接続（純粋なSSH - 事前に ssm-* でポートフォワーディングが必要）
 ## =============================================================================
 
-.PHONY: ssh-mc ssh-api ssh-web ssh-mysql ssh-postgres delete-user
+.PHONY: ssh-mc ssh-api ssh-web ssh-mysql ssh-postgres delete-user login-mysql
 
 ssh-mc: ## i-a (MC Server) へSSH接続 (要: 別ターミナルで make ssm-mc)
 	@echo "🔗 MC Server (i-a) へSSH接続します..."
@@ -559,6 +559,18 @@ ssh-postgres: ## RDS PostgreSQL へpsql接続 (要: 別ターミナルで make s
 	echo "⚠️  事前に別ターミナルで 'make ssm-postgres' を実行してください"; \
 	echo ""; \
 	PGPASSWORD="$$POSTGRES_PASSWORD" psql -h 127.0.0.1 -p 5433 -U "$$POSTGRES_USER" -d kishax_web
+
+login-mysql: ## RDS MySQL へMySQL接続
+	@echo "🔗 RDS MySQL へMySQL接続します..."
+	@if [ ! -f .env.auto ]; then \
+		echo "❌ .env.autoが見つかりません。'make env-load'を実行してください"; \
+		exit 1; \
+	fi; \
+	source .env && source .env.auto; \
+	echo ""; \
+	echo "⚠️  事前に別ターミナルで 'make ssm-mysql' を実行してください"; \
+	echo ""; \
+	mysql -h 127.0.0.1 -P 3307 -u "$$MYSQL_USER" -p"$$MYSQL_PASSWORD" kishax_mc
 
 delete-user: ## 指定ユーザーをMySQL/PostgreSQLから削除 (要: make ssm-mysql & make ssm-postgres)
 	@echo "🗑️  ユーザーデータを削除します"

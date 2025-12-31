@@ -10,14 +10,16 @@
 
 1. [概要](#概要)
 2. [バックアップの仕組み](#バックアップの仕組み)
-3. [使い方](#使い方)
+3. [デプロイメント (deployment/) との違い](#デプロイメント-deployment-との違い)
+4. [使い方](#使い方)
    - [バックアップ実行](#バックアップ実行)
    - [バックアップ一覧確認](#バックアップ一覧確認)
    - [バックアップから復元](#バックアップから復元)
    - [整合性確認](#整合性確認)
-4. [高度な使い方](#高度な使い方)
-5. [トラブルシューティング](#トラブルシューティング)
-6. [運用ベストプラクティス](#運用ベストプラクティス)
+   - [デプロイメント用アップロード](#デプロイメント用アップロード)
+5. [高度な使い方](#高度な使い方)
+6. [トラブルシューティング](#トラブルシューティング)
+7. [運用ベストプラクティス](#運用ベストプラクティス)
 
 ---
 
@@ -81,6 +83,56 @@ s3://kishax-production-world-backups/
 - **保存期間**: 180日
 - **自動削除**: 180日経過後にS3ライフサイクルポリシーで自動削除
 - **バージョニング**: 有効（誤削除時の復旧可能）
+
+---
+
+## デプロイメント (deployment/) との違い
+
+同じS3バケット内に `deployment/` と `backups/` の2つのプレフィックスが存在します。それぞれ異なる目的で使用されます。
+
+### deployment/ - デプロイメント用
+
+```
+s3://kishax-production-world-backups/
+└── deployment/
+    └── YYYYMM/                # 年月 (例: 202512)
+        └── <version>/         # バージョン番号 (例: 1, 2, ...)
+            └── <server_name>/ # サーバー名 (例: home, latest)
+                ├── world/               # オーバーワールド (非圧縮)
+                ├── world_nether/        # ネザー (非圧縮)
+                ├── world_the_end/       # ジ・エンド (非圧縮)
+                ├── world_the_creative/  # クリエイティブ (latestのみ、非圧縮)
+                ├── metadata.json        # メタデータ
+                └── __IMPORT_ENABLED__   # インポート許可フラグ
+```
+
+**用途**: EC2初回起動時の自動インポート ([import-world-from-s3.sh](../../apps/mc/docker/scripts/import-world-from-s3.sh))
+
+**特徴**:
+- **非圧縮**: `aws s3 sync` で直接アップロード/ダウンロード (高速)
+- **永続保存**: ライフサイクルポリシーなし (自動削除されない)
+- **バージョン管理**: YYYYMM + バージョン番号
+- **フラグ**: `__IMPORT_ENABLED__` (このフラグがあるデータのみインポート対象)
+
+### backups/ - バックアップ用 (このドキュメントの対象)
+
+**用途**: 定期バックアップと災害復旧
+
+**特徴**:
+- **圧縮**: tar.gz形式 (ストレージコスト削減)
+- **自動削除**: 180日で削除 (ライフサイクルポリシー)
+- **日付管理**: YYYYMMDD
+- **フラグ**: `__BACKUP_COMPLETED__`
+
+### どちらを使うべきか？
+
+| 用途 | 使用するプレフィックス | コマンド |
+|------|---------------------|----------|
+| **EC2初回起動時の自動インポート** | `deployment/` | `make deploy-world` |
+| **定期バックアップ (災害復旧)** | `backups/` | `make backup-world` |
+| **手動復元 (トラブル時)** | `backups/` | `make backup-world-restore` |
+
+**Note**: `deployment/` のデータは servers.json で `s3import: true` を設定すると、初回起動時に自動的にインポートされます。
 
 ---
 
@@ -340,6 +392,178 @@ make backup-world-verify
 
 ✅ 整合性確認完了
 ```
+
+---
+
+### デプロイメント用アップロード
+
+EC2初回起動時の自動インポート用にワールドデータを `deployment/` にアップロードします。
+
+#### 全サーバーをデプロイ (version=1)
+
+```bash
+make deploy-world
+```
+
+**実行例**:
+```bash
+$ make deploy-world
+🚀 ワールドデータをS3にデプロイします
+
+🔍 デプロイ対象サーバーを確認中...
+
+=== S3 World Deployment Script ===
+📅 年月: 202512
+🔢 バージョン: 1
+📍 S3バケット: s3://kishax-production-world-backups/deployment/202512/1/
+🔧 AWS リージョン: ap-northeast-1
+
+=== 前提条件チェック ===
+✅ 設定ファイル確認: /mc/config/servers.json
+✅ jq インストール済み
+✅ AWS CLI インストール済み
+✅ S3バケットアクセス確認
+
+=== 対象サーバー取得 ===
+📋 対象サーバー数: 2
+  - home
+  - latest
+
+⚠️  デプロイメント用データとしてS3にアップロードします
+⚠️  このデータは import-world-from-s3.sh で使用されます
+
+デプロイを開始しますか？ (y/N): y
+
+=== デプロイ: home ===
+  検出されたワールド: world world_nether world_the_end
+  📦 world: アップロード中...
+     サイズ: 1.2G
+     ✅ アップロード完了
+  📦 world_nether: アップロード中...
+     サイズ: 320M
+     ✅ アップロード完了
+  📦 world_the_end: アップロード中...
+     サイズ: 180M
+     ✅ アップロード完了
+  📝 メタデータ作成中...
+  ✅ メタデータ作成完了
+  🏁 インポートフラグ作成中...
+  ✅ インポートフラグ作成完了
+
+=== デプロイ結果 ===
+✅ 成功: 2
+❌ 失敗: 0
+
+✅ デプロイが完了しました！
+
+ℹ️  次のステップ:
+1. S3の内容を確認:
+   aws s3 ls s3://kishax-production-world-backups/deployment/202512/1/ --recursive --human-readable
+
+2. EC2でワールドデータをインポート:
+   - servers.json で s3import: true に設定
+   - Docker コンテナを起動
+```
+
+#### デプロイメント一覧を確認
+
+```bash
+make deploy-world-list
+```
+
+**実行例**:
+```bash
+$ make deploy-world-list
+📋 S3ワールドデプロイメント一覧
+
+📦 S3 Bucket: kishax-production-world-backups
+📂 Prefix: deployment/
+
+🔍 デプロイメント一覧 (年月/バージョン):
+  📅 202512
+    🔢 1
+    🔢 2
+  📅 202511
+    🔢 1
+
+💡 詳細を確認するには:
+   aws s3 ls s3://kishax-production-world-backups/deployment/<YYYYMM>/<version>/ --recursive --human-readable
+```
+
+#### バージョン指定してデプロイ
+
+```bash
+# Dockerコンテナ内で直接実行
+docker exec -it kishax-minecraft /mc/scripts/deploy-world-to-s3.sh --version 2
+```
+
+#### 特定サーバーのみデプロイ
+
+```bash
+docker exec -it kishax-minecraft /mc/scripts/deploy-world-to-s3.sh --server latest --version 3
+```
+
+#### ドライランで確認
+
+```bash
+docker exec -it kishax-minecraft /mc/scripts/deploy-world-to-s3.sh --dry-run
+```
+
+#### S3デプロイメントの詳細確認
+
+```bash
+# 特定のデプロイメントを確認
+aws s3 ls s3://kishax-production-world-backups/deployment/202512/1/latest/ \
+    --recursive --human-readable --region ap-northeast-1
+```
+
+**出力例**:
+```
+2025-12-31 12:00:00    1.2 GiB deployment/202512/1/latest/world/level.dat
+2025-12-31 12:00:00    320 MiB deployment/202512/1/latest/world_nether/DIM-1/region/r.0.0.mca
+2025-12-31 12:00:00    890 MiB deployment/202512/1/latest/world_the_creative/region/r.0.0.mca
+2025-12-31 12:00:00    180 MiB deployment/202512/1/latest/world_the_end/DIM1/region/r.0.0.mca
+2025-12-31 12:00:00    1.2 KiB deployment/202512/1/latest/metadata.json
+2025-12-31 12:00:00       30 B deployment/202512/1/latest/__IMPORT_ENABLED__
+```
+
+#### メタデータ確認
+
+```bash
+aws s3 cp s3://kishax-production-world-backups/deployment/202512/1/latest/metadata.json - \
+    --region ap-northeast-1 | jq .
+```
+
+**出力例**:
+```json
+{
+  "server": "latest",
+  "year_month": "202512",
+  "version": "1",
+  "timestamp": "2025-12-31T03:00:15Z",
+  "total_size_bytes": 2600374272,
+  "worlds": [
+    {
+      "world": "world",
+      "size_bytes": 1288490752
+    },
+    {
+      "world": "world_nether",
+      "size_bytes": 335544320
+    },
+    {
+      "world": "world_the_creative",
+      "size_bytes": 933281920
+    },
+    {
+      "world": "world_the_end",
+      "size_bytes": 188743680
+    }
+  ]
+}
+```
+
+**Note**: deployment/ は **非圧縮** のため、backups/ (圧縮) よりもファイルサイズが大きくなります。
 
 ---
 

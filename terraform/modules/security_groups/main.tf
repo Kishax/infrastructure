@@ -15,14 +15,7 @@ resource "aws_security_group" "mc_server" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  # SSH access (management)
-  ingress {
-    description = "SSH access"
-    from_port   = 22
-    to_port     = 22
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]  # TODO: Restrict to specific IP
-  }
+  # SSH access via Jump Server only (see security group rules below)
 
   # Allow all outbound traffic
   egress {
@@ -80,14 +73,7 @@ resource "aws_security_group" "api_server" {
     security_groups = [aws_security_group.web_server.id]
   }
 
-  # SSH access (management)
-  ingress {
-    description = "SSH access"
-    from_port   = 22
-    to_port     = 22
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]  # TODO: Restrict to specific IP
-  }
+  # SSH access via Jump Server only (see security group rules below)
 
   # Allow all outbound traffic
   egress {
@@ -128,14 +114,7 @@ resource "aws_security_group" "web_server" {
     cidr_blocks = ["0.0.0.0/0"]  # TODO: Restrict to CloudFront IP ranges
   }
 
-  # SSH access (management)
-  ingress {
-    description = "SSH access"
-    from_port   = 22
-    to_port     = 22
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]  # TODO: Restrict to specific IP
-  }
+  # SSH access via Jump Server only (see security group rules below)
 
   # Allow all outbound traffic
   egress {
@@ -272,5 +251,48 @@ resource "aws_security_group_rule" "web_server_ssh_from_jump" {
   protocol                 = "tcp"
   source_security_group_id = aws_security_group.jump_server.id
   security_group_id        = aws_security_group.web_server.id
+  description              = "SSH from Jump Server for Port Forwarding"
+}
+
+# Terraria Server Security Group (i-e)
+resource "aws_security_group" "terraria_server" {
+  name        = "kishax-${var.environment}-terraria-server-sg"
+  description = "Security group for Terraria Server (i-e)"
+  vpc_id      = var.vpc_id
+
+  # Terraria client connections
+  ingress {
+    description = "Terraria client connections"
+    from_port   = 7777
+    to_port     = 7777
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  # SSH access via Jump Server only (see security group rules below)
+
+  # Allow all outbound traffic
+  egress {
+    description = "All outbound traffic"
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = {
+    Name     = "kishax-${var.environment}-terraria-server-sg"
+    Instance = "i-e"
+  }
+}
+
+# Jump Server から Terraria Server へのSSH
+resource "aws_security_group_rule" "terraria_server_ssh_from_jump" {
+  type                     = "ingress"
+  from_port                = 22
+  to_port                  = 22
+  protocol                 = "tcp"
+  source_security_group_id = aws_security_group.jump_server.id
+  security_group_id        = aws_security_group.terraria_server.id
   description              = "SSH from Jump Server for Port Forwarding"
 }

@@ -71,12 +71,43 @@ terraform output
 | **i-c** | Web Server | t2.micro Spot | 24/7稼働 |
 | **i-a** | MC Server | t3.large On-Demand | 22:00-27:00 |
 | **i-d** | RDS Jump Server | t2.micro On-Demand | 停止中 |
+| **i-e** | Terraria Server | t3.small On-Demand | 手動起動/停止 |
 
 ---
 
 ## 準備作業
 
 ### 0. Terraform適用時の注意事項
+
+#### ⚠️ Spotインスタンス停止状態でのterraform plan実行
+
+**重要**: Spotインスタンス（i-b, i-c）が停止状態で `terraform plan` を実行すると、強制置換（destroy + recreate）が発生します。
+
+**原因**:
+- 停止中のSpotインスタンスは `associate_public_ip_address` 属性を正しく返さない
+- Terraformは現在値 `false` と期待値 `true` の差分を検出
+- インスタンスとそのタグリソースの強制置換がトリガーされる
+
+**対処法**:
+```bash
+# terraform plan/apply実行前に、Spotインスタンスを起動
+aws ec2 start-instances \
+  --instance-ids $INSTANCE_ID_B $INSTANCE_ID_C \
+  --profile AdministratorAccess-126112056177
+
+# ステータスチェックがグリーンになるまで待つ（2-3分）
+aws ec2 describe-instance-status \
+  --instance-ids $INSTANCE_ID_B $INSTANCE_ID_C \
+  --profile AdministratorAccess-126112056177 \
+  --query 'InstanceStatuses[*].{ID:InstanceId,State:InstanceState.Name,Status:InstanceStatus.Status}' \
+  --output table
+
+# Status が "ok" になったら terraform plan を実行
+cd /Users/tk/git/Kishax/infrastructure/terraform
+terraform plan
+```
+
+**Note**: Jump Server (i-d) も同様の問題が発生するため、必要に応じて起動してください。
 
 #### ⚠️ Spotインスタンス再作成時のエラー対処
 
@@ -874,6 +905,64 @@ echo "i-b Private IP: $INSTANCE_ID_B_PRIVATE_IP"
 echo "i-c Private IP: $INSTANCE_ID_C_PRIVATE_IP"
 echo "i-a Private IP: $INSTANCE_ID_A_PRIVATE_IP"
 ```
+
+---
+
+## セキュリティモデル
+
+### SSH アクセス制限
+
+**重要**: 全てのEC2インスタンス（i-a, i-b, i-c, i-e）はJump Server (i-d) 経由でのみSSHアクセス可能です。
+
+#### アーキテクチャ概要
+
+```
+インターネット
+    |
+    | (SSM Session Manager経由)
+    ↓
+Jump Server (i-d)
+    |
+    | (SSH Port Forwarding)
+    ├→ MC Server (i-a):22
+    ├→ API Server (i-b):22
+    ├→ Web Server (i-c):22
+    └→ Terraria Server (i-e):22
+```
+
+#### セキュリティグループ設定
+
+各インスタンスのSSH（Port 22）は以下のように設定されています：
+
+| インスタンス | SSH Ingress ルール |
+|------------|-------------------|
+| **i-a (MC Server)** | Jump Server (i-d) のセキュリティグループからのみ許可 |
+| **i-b (API Server)** | Jump Server (i-d) のセキュリティグループからのみ許可 |
+| **i-c (Web Server)** | Jump Server (i-d) のセキュリティグループからのみ許可 |
+| **i-e (Terraria Server)** | Jump Server (i-d) のセキュリティグループからのみ許可 |
+| **i-d (Jump Server)** | SSM Session Manager経由のみ（SSH Port閉鎖） |
+
+#### 設計思想
+
+1. **Jump Server (i-d) は SSM Session Manager経由でのみアクセス**
+   - SSH Port 22 は完全に閉鎖
+   - AWS Session Manager Plugin を使用した安全な接続
+   - IAM認証による厳格なアクセス制御
+
+2. **他の全インスタンスは Jump Server 経由でのみアクセス**
+   - 0.0.0.0/0 からの直接SSH接続は禁止
+   - Port Forwardingによるローカルから各サーバーへの安全な接続
+   - SSHキーを Jump Server に配置する必要がない
+
+3. **メリット**
+   - 単一のエントリーポイントによるアクセス制御
+   - SSHキー漏洩リスクの最小化
+   - CloudTrailによる全アクセスログの記録
+   - 追加コストなし（SSM Session Manager は無料）
+
+#### 接続方法
+
+詳細な接続手順は「EC2インスタンスへのアクセス方法」セクションを参照してください。
 
 ---
 
@@ -1770,6 +1859,245 @@ redis-cli -h $INSTANCE_ID_B_PRIVATE_IP -p 6379 ping
 # DNS確認（別ターミナルから）
 # dig mc.kishax.net
 # nslookup mc.kishax.net
+```
+
+---
+
+## Phase 4: i-e (Terraria Server) - オプショナル
+
+### 🎯 目標
+- Terraria Server起動（手動運用）
+- Route53 DNSレコード設定確認
+- ポート7777でのアクセス確認
+
+### 概要
+
+Terraria Server (i-e) は以下の特徴を持つゲームサーバーです：
+
+| 項目 | 設定値 |
+|------|--------|
+| **インスタンスタイプ** | t3.small On-Demand |
+| **配置** | Public Subnet |
+| **ポート** | 7777 (TCP) |
+| **DNS** | tera.kishax.net |
+| **運用モード** | 手動起動/停止 |
+| **実行方式** | ネイティブ実行（Dockerなし） |
+| **起動タイミング** | 使用時のみ起動してコスト削減 |
+
+### 4-1. EC2にJump Server経由でSSH接続
+
+```bash
+# Terraria Server (i-e) インスタンスIDを取得
+export INSTANCE_ID_E=$(terraform output -raw terraria_server_instance_id)
+
+# Private IP を取得
+export INSTANCE_ID_E_PRIVATE_IP=$(aws ec2 describe-instances \
+  --instance-ids $INSTANCE_ID_E \
+  --profile AdministratorAccess-126112056177 \
+  --query 'Reservations[0].Instances[0].PrivateIpAddress' \
+  --output text)
+
+echo "Terraria Server (i-e) Private IP: $INSTANCE_ID_E_PRIVATE_IP"
+
+# ターミナル1: Port Forwardingセッション開始
+aws ssm start-session \
+  --profile AdministratorAccess-126112056177 \
+  --target $INSTANCE_ID_D \
+  --document-name AWS-StartPortForwardingSessionToRemoteHost \
+  --parameters "{\"host\":[\"${INSTANCE_ID_E_PRIVATE_IP}\"],\"portNumber\":[\"22\"],\"localPortNumber\":[\"2225\"]}"
+
+# ターミナル2: SSHで接続（新しいターミナルを開いて実行）
+ssh -i /Users/tk/git/Kishax/infrastructure/minecraft.pem -p 2225 ec2-user@localhost
+```
+
+### 4-2. Terraria Server セットアップ
+
+i-e インスタンスはUser Dataで基本的なツール（wget, unzip, screen, tmux）がインストール済みです。
+
+```bash
+# インストール済みツールの確認
+which wget unzip screen tmux
+
+# Terrariaディレクトリ確認
+ls -la /opt/terraria/
+
+# User Data実行ログ確認
+sudo cat /var/log/user-data.log
+```
+
+### 4-3. Terraria Server のインストールと設定
+
+```bash
+# Terrariaディレクトリに移動
+cd /opt/terraria
+
+# Terraria Dedicated Serverをダウンロード
+# 最新版のURLはhttps://terraria.org/から取得
+wget https://terraria.org/api/download/pc-dedicated-server/terraria-server-XXXX.zip
+
+# 解凍
+unzip terraria-server-XXXX.zip
+
+# 起動スクリプトに実行権限付与
+cd 1449/Linux/
+chmod +x TerrariaServer.bin.x86_64
+
+# 初回起動（設定ファイル生成）
+./TerrariaServer.bin.x86_64
+
+# ワールド設定（対話形式）
+# 1. ワールドサイズを選択（1=Small, 2=Medium, 3=Large）
+# 2. ワールド名を入力
+# 3. Seedを入力（空白でランダム）
+# 4. 難易度選択（1=Normal, 2=Expert, 3=Master, 4=Journey）
+# 5. Max playersを設定（推奨: 8-16）
+# 6. Port設定（デフォルト: 7777）
+# 7. 自動ポートフォワード（n）
+# 8. パスワード設定（空白でパスワードなし）
+```
+
+### 4-4. Screenセッションで常駐起動
+
+```bash
+# Screenセッション作成
+screen -S terraria
+
+# Terraria Server起動
+cd /opt/terraria/1449/Linux/
+./TerrariaServer.bin.x86_64
+
+# ワールドを選択して起動
+# Screenセッションからデタッチ: Ctrl+A → D
+
+# Screenセッション一覧確認
+screen -ls
+
+# Screenセッションに再接続
+screen -r terraria
+```
+
+### 4-5. Route53 DNS確認
+
+```bash
+# ローカルマシンから実行
+
+# Terraria Server Elastic IP確認
+terraform output terraria_server_elastic_ip
+
+# DNS確認
+dig tera.kishax.net
+nslookup tera.kishax.net
+
+# Route53レコード確認
+aws route53 list-resource-record-sets \
+  --profile AdministratorAccess-126112056177 \
+  --hosted-zone-id $(terraform output -raw route53_zone_id) \
+  --query "ResourceRecordSets[?Name=='tera.kishax.net.']"
+```
+
+### 4-6. 動作確認
+
+```bash
+# ポート確認（i-e上で実行）
+sudo netstat -tlnp | grep 7777
+
+# Terrariaクライアントから接続
+# サーバーアドレス: tera.kishax.net:7777
+```
+
+### 4-7. サーバー停止とインスタンス管理
+
+```bash
+# Terrariaサーバー停止（i-e上で実行）
+screen -r terraria
+# サーバーコンソールで "exit" と入力
+
+# インスタンスを停止（ローカルマシンから）
+aws ec2 stop-instances \
+  --instance-ids $INSTANCE_ID_E \
+  --profile AdministratorAccess-126112056177
+
+# インスタンスを起動（使用時）
+aws ec2 start-instances \
+  --instance-ids $INSTANCE_ID_E \
+  --profile AdministratorAccess-126112056177
+```
+
+### 4-8. 自動起動スクリプト（オプション）
+
+```bash
+# i-e上で実行
+
+# 起動スクリプト作成
+cat > /opt/terraria/start.sh << 'EOF'
+#!/bin/bash
+cd /opt/terraria/1449/Linux/
+screen -dmS terraria ./TerrariaServer.bin.x86_64 -world /opt/terraria/.local/share/Terraria/Worlds/MyWorld.wld -autocreate 2
+EOF
+
+chmod +x /opt/terraria/start.sh
+
+# systemdサービス作成（自動起動設定）
+sudo tee /etc/systemd/system/terraria.service > /dev/null << 'EOF'
+[Unit]
+Description=Terraria Server
+After=network.target
+
+[Service]
+Type=forking
+User=ec2-user
+WorkingDirectory=/opt/terraria
+ExecStart=/opt/terraria/start.sh
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+# サービス有効化
+sudo systemctl daemon-reload
+sudo systemctl enable terraria
+sudo systemctl start terraria
+
+# ステータス確認
+sudo systemctl status terraria
+```
+
+### トラブルシューティング
+
+**問題1: ポート7777にアクセスできない**
+
+```bash
+# セキュリティグループ確認
+aws ec2 describe-security-groups \
+  --profile AdministratorAccess-126112056177 \
+  --filters "Name=tag:Name,Values=kishax-production-terraria-server-sg" \
+  --query 'SecurityGroups[0].IpPermissions[?ToPort==`7777`]' \
+  --output json
+
+# Terrariaプロセス確認
+ps aux | grep Terraria
+
+# ポート確認
+sudo netstat -tlnp | grep 7777
+```
+
+**問題2: SSH接続できない**
+
+```bash
+# Jump Server (i-d) が起動しているか確認
+aws ec2 describe-instances \
+  --instance-ids $INSTANCE_ID_D \
+  --profile AdministratorAccess-126112056177 \
+  --query 'Reservations[0].Instances[0].State.Name' \
+  --output text
+
+# Terraria Server (i-e) が起動しているか確認
+aws ec2 describe-instances \
+  --instance-ids $INSTANCE_ID_E \
+  --profile AdministratorAccess-126112056177 \
+  --query 'Reservations[0].Instances[0].State.Name' \
+  --output text
 ```
 
 ---

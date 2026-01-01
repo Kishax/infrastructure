@@ -92,11 +92,19 @@ PRIVATE_IP_C=$(aws ec2 describe-instances \
     --query 'Reservations[0].Instances[0].PrivateIpAddress' \
     --output text 2>/dev/null)
 
-echo -e "${GREEN}✅ MC Server (i-a):  $PRIVATE_IP_A${NC}"
-echo -e "${GREEN}✅ API Server (i-b): $PRIVATE_IP_B${NC}"
-echo -e "${GREEN}✅ Web Server (i-c): $PRIVATE_IP_C${NC}"
-echo -e "${GREEN}✅ RDS MySQL:        $RDS_MYSQL_HOST${NC}"
-echo -e "${GREEN}✅ RDS PostgreSQL:   $RDS_POSTGRES_HOST${NC}"
+PRIVATE_IP_E=$(aws ec2 describe-instances \
+    --profile "$AWS_PROFILE" \
+    --region "$AWS_REGION" \
+    --filters "Name=tag:Name,Values=kishax-${ENVIRONMENT}-terraria-server" \
+    --query 'Reservations[0].Instances[0].PrivateIpAddress' \
+    --output text 2>/dev/null)
+
+echo -e "${GREEN}✅ MC Server (i-a):      $PRIVATE_IP_A${NC}"
+echo -e "${GREEN}✅ API Server (i-b):     $PRIVATE_IP_B${NC}"
+echo -e "${GREEN}✅ Web Server (i-c):     $PRIVATE_IP_C${NC}"
+echo -e "${GREEN}✅ Terraria Server (i-e): $PRIVATE_IP_E${NC}"
+echo -e "${GREEN}✅ RDS MySQL:            $RDS_MYSQL_HOST${NC}"
+echo -e "${GREEN}✅ RDS PostgreSQL:       $RDS_POSTGRES_HOST${NC}"
 
 # 既存のtmuxセッションを確認
 if tmux has-session -t "$TMUX_SESSION_NAME" 2>/dev/null; then
@@ -138,6 +146,12 @@ if [ -n "$PRIVATE_IP_C" ] && [ "$PRIVATE_IP_C" != "None" ]; then
     tmux send-keys -t "$TMUX_SESSION_NAME:web" "aws ssm start-session --target $INSTANCE_ID_D --document-name AWS-StartPortForwardingSessionToRemoteHost --parameters '{\"host\":[\"$PRIVATE_IP_C\"],\"portNumber\":[\"22\"],\"localPortNumber\":[\"2224\"]}' --profile $AWS_PROFILE" C-m
 fi
 
+if [ -n "$PRIVATE_IP_E" ] && [ "$PRIVATE_IP_E" != "None" ]; then
+    echo -e "${BLUE}🔗 Terraria Server (localhost:2225)${NC}"
+    tmux new-window -t "$TMUX_SESSION_NAME" -n "terra"
+    tmux send-keys -t "$TMUX_SESSION_NAME:terra" "aws ssm start-session --target $INSTANCE_ID_D --document-name AWS-StartPortForwardingSessionToRemoteHost --parameters '{\"host\":[\"$PRIVATE_IP_E\"],\"portNumber\":[\"22\"],\"localPortNumber\":[\"2225\"]}' --profile $AWS_PROFILE" C-m
+fi
+
 if [ -n "$RDS_MYSQL_HOST" ] && [ "$RDS_MYSQL_HOST" != "None" ]; then
     echo -e "${BLUE}🔗 RDS MySQL (localhost:3307)${NC}"
     tmux new-window -t "$TMUX_SESSION_NAME" -n "mysql"
@@ -164,6 +178,7 @@ echo -e "${BLUE}📊 接続情報:${NC}"
 echo -e "  🖥️  MC Server:       ssh -i minecraft.pem -p 2222 ec2-user@localhost"
 echo -e "  🖥️  API Server:      ssh -i minecraft.pem -p 2223 ec2-user@localhost"
 echo -e "  🖥️  Web Server:      ssh -i minecraft.pem -p 2224 ec2-user@localhost"
+echo -e "  🖥️  Terraria Server: ssh -i minecraft.pem -p 2225 ec2-user@localhost"
 echo -e "  🗄️  MySQL:           mysql -h 127.0.0.1 -P 3307 -u root -p kishax_mc"
 echo -e "  🗄️  PostgreSQL:      psql -h 127.0.0.1 -p 5433 -U postgres -d kishax_web"
 echo ""

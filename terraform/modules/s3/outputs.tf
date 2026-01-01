@@ -47,3 +47,19 @@ output "world_backups_bucket_regional_domain_name" {
   description = "S3 bucket regional domain name for world backups"
   value       = aws_s3_bucket.world_backups.bucket_regional_domain_name
 }
+
+# Terraria Backups Bucket
+output "terraria_backups_bucket_name" {
+  description = "S3 bucket name for terraria backups"
+  value       = aws_s3_bucket.terraria_backups.id
+}
+
+output "terraria_backups_bucket_arn" {
+  description = "S3 bucket ARN for terraria backups"
+  value       = aws_s3_bucket.terraria_backups.arn
+}
+
+output "terraria_backups_bucket_regional_domain_name" {
+  description = "S3 bucket regional domain name for terraria backups"
+  value       = aws_s3_bucket.terraria_backups.bucket_regional_domain_name
+}

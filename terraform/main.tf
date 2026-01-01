@@ -117,16 +117,18 @@ module "ec2" {
   private_subnet_ids = module.vpc.private_subnet_ids
 
   # Security Groups
-  mc_server_sg_id   = module.security_groups.mc_server_sg_id
-  api_server_sg_id  = module.security_groups.api_server_sg_id
-  web_server_sg_id  = module.security_groups.web_server_sg_id
-  jump_server_sg_id = module.security_groups.jump_server_sg_id
+  mc_server_sg_id       = module.security_groups.mc_server_sg_id
+  api_server_sg_id      = module.security_groups.api_server_sg_id
+  web_server_sg_id      = module.security_groups.web_server_sg_id
+  jump_server_sg_id     = module.security_groups.jump_server_sg_id
+  terraria_server_sg_id = module.security_groups.terraria_server_sg_id
 
   # IAM Roles
-  mc_server_instance_profile   = module.iam.mc_server_instance_profile_name
-  api_server_instance_profile  = module.iam.api_server_instance_profile_name
-  web_server_instance_profile  = module.iam.web_server_instance_profile_name
-  jump_server_instance_profile = module.iam.jump_server_instance_profile_name
+  mc_server_instance_profile       = module.iam.mc_server_instance_profile_name
+  api_server_instance_profile      = module.iam.api_server_instance_profile_name
+  web_server_instance_profile      = module.iam.web_server_instance_profile_name
+  jump_server_instance_profile     = module.iam.jump_server_instance_profile_name
+  terraria_server_instance_profile = module.iam.terraria_server_instance_profile_name
 
   # RDS Endpoints
   postgres_endpoint = module.rds.postgres_endpoint
@@ -170,4 +172,8 @@ module "route53" {
   web_domain_name        = var.web_domain_name
   cloudfront_domain_name = module.cloudfront.cloudfront_domain_name
   cloudfront_zone_id     = module.cloudfront.cloudfront_zone_id
+
+  # Terraria Server
+  terraria_domain_name         = var.terraria_domain_name
+  terraria_server_elastic_ip   = module.ec2.terraria_server_elastic_ip
 }

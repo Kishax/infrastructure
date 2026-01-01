@@ -52,6 +52,16 @@ output "jump_server_instance_id" {
   value       = module.ec2.jump_server_instance_id
 }
 
+output "terraria_server_instance_id" {
+  description = "Terraria Server (i-e) Instance ID"
+  value       = module.ec2.terraria_server_instance_id
+}
+
+output "terraria_server_elastic_ip" {
+  description = "Terraria Server Elastic IP"
+  value       = module.ec2.terraria_server_elastic_ip
+}
+
 # RDS Outputs
 output "postgres_endpoint" {
   description = "PostgreSQL RDS endpoint"
@@ -101,6 +111,11 @@ output "mc_domain_record" {
 output "web_domain_record" {
   description = "Web Application Domain Record"
   value       = "${var.web_domain_name} -> ${module.cloudfront.cloudfront_domain_name}"
+}
+
+output "terraria_domain_record" {
+  description = "Terraria Server Domain Record"
+  value       = "${var.terraria_domain_name} -> ${module.ec2.terraria_server_elastic_ip}"
 }
 
 # SQS Access Credentials (stored in SSM)
@@ -161,4 +176,14 @@ output "s3_world_backups_bucket_name" {
 output "s3_world_backups_bucket_arn" {
   description = "S3 bucket ARN for world backups"
   value       = module.s3.world_backups_bucket_arn
+}
+
+output "s3_terraria_backups_bucket_name" {
+  description = "S3 bucket name for terraria backups"
+  value       = module.s3.terraria_backups_bucket_name
+}
+
+output "s3_terraria_backups_bucket_arn" {
+  description = "S3 bucket ARN for terraria backups"
+  value       = module.s3.terraria_backups_bucket_arn
 }

@@ -71,20 +71,24 @@ env-load: env-check ## Terraform outputから環境変数を読み込む
 		echo "export S3_BUCKET=\"$$(cd terraform && terraform output -raw s3_docker_images_bucket_name 2>/dev/null)\"" >> .env.auto; \
 		echo "export S3_IMAGE_MAPS_BUCKET=\"$$(cd terraform && terraform output -raw s3_image_maps_bucket_name 2>/dev/null)\"" >> .env.auto; \
 		echo "export S3_WORLD_BACKUPS_BUCKET=\"$$(cd terraform && terraform output -raw s3_world_backups_bucket_name 2>/dev/null)\"" >> .env.auto; \
+		echo "export S3_TERRARIA_BACKUPS_BUCKET=\"$$(cd terraform && terraform output -raw s3_terraria_backups_bucket_name 2>/dev/null)\"" >> .env.auto; \
 		echo "" >> .env.auto; \
 		echo "# EC2 Instance IDs" >> .env.auto; \
 		echo "export INSTANCE_ID_A=\"$$(cd terraform && terraform output -raw mc_server_instance_id 2>/dev/null)\"" >> .env.auto; \
 		echo "export INSTANCE_ID_B=\"$$(cd terraform && terraform output -raw api_server_instance_id 2>/dev/null)\"" >> .env.auto; \
 		echo "export INSTANCE_ID_C=\"$$(cd terraform && terraform output -raw web_server_instance_id 2>/dev/null)\"" >> .env.auto; \
 		echo "export INSTANCE_ID_D=\"$$(cd terraform && terraform output -raw jump_server_instance_id 2>/dev/null)\"" >> .env.auto; \
+		echo "export INSTANCE_ID_E=\"$$(cd terraform && terraform output -raw terraria_server_instance_id 2>/dev/null)\"" >> .env.auto; \
 		echo "" >> .env.auto; \
 		echo "# EC2 Private IPs" >> .env.auto; \
 		INST_A=$$(cd terraform && terraform output -raw mc_server_instance_id 2>/dev/null); \
 		INST_B=$$(cd terraform && terraform output -raw api_server_instance_id 2>/dev/null); \
 		INST_C=$$(cd terraform && terraform output -raw web_server_instance_id 2>/dev/null); \
+		INST_E=$$(cd terraform && terraform output -raw terraria_server_instance_id 2>/dev/null); \
 		echo "export INSTANCE_ID_A_PRIVATE_IP=\"$$(aws ec2 describe-instances --instance-ids $$INST_A --query Reservations[0].Instances[0].PrivateIpAddress --output text 2>/dev/null || echo "")\"" >> .env.auto; \
 		echo "export INSTANCE_ID_B_PRIVATE_IP=\"$$(aws ec2 describe-instances --instance-ids $$INST_B --query Reservations[0].Instances[0].PrivateIpAddress --output text 2>/dev/null || echo "")\"" >> .env.auto; \
 		echo "export INSTANCE_ID_C_PRIVATE_IP=\"$$(aws ec2 describe-instances --instance-ids $$INST_C --query Reservations[0].Instances[0].PrivateIpAddress --output text 2>/dev/null || echo "")\"" >> .env.auto; \
+		echo "export INSTANCE_ID_E_PRIVATE_IP=\"$$(aws ec2 describe-instances --instance-ids $$INST_E --query Reservations[0].Instances[0].PrivateIpAddress --output text 2>/dev/null || echo "")\"" >> .env.auto; \
 		echo "" >> .env.auto; \
 		echo "# Note: POSTGRES_PASSWORD and MYSQL_PASSWORD are defined in .env" >> .env.auto; \
 		echo "# They are not re-exported here to avoid shell variable expansion issues" >> .env.auto; \
@@ -114,17 +118,20 @@ env-show: ## 現在の環境変数を表示
 	@echo "S3_BUCKET: $$S3_BUCKET"
 	@echo "S3_IMAGE_MAPS_BUCKET: $$S3_IMAGE_MAPS_BUCKET"
 	@echo "S3_WORLD_BACKUPS_BUCKET: $$S3_WORLD_BACKUPS_BUCKET"
+	@echo "S3_TERRARIA_BACKUPS_BUCKET: $$S3_TERRARIA_BACKUPS_BUCKET"
 	@echo ""
 	@echo "=== EC2 ==="
 	@echo "INSTANCE_ID_A (MC): $$INSTANCE_ID_A"
 	@echo "INSTANCE_ID_B (API): $$INSTANCE_ID_B"
 	@echo "INSTANCE_ID_C (Web): $$INSTANCE_ID_C"
 	@echo "INSTANCE_ID_D (Jump): $$INSTANCE_ID_D"
+	@echo "INSTANCE_ID_E (Terraria): $$INSTANCE_ID_E"
 	@echo ""
 	@echo "=== Private IPs ==="
 	@echo "INSTANCE_ID_A_PRIVATE_IP: $$INSTANCE_ID_A_PRIVATE_IP"
 	@echo "INSTANCE_ID_B_PRIVATE_IP: $$INSTANCE_ID_B_PRIVATE_IP"
 	@echo "INSTANCE_ID_C_PRIVATE_IP: $$INSTANCE_ID_C_PRIVATE_IP"
+	@echo "INSTANCE_ID_E_PRIVATE_IP: $$INSTANCE_ID_E_PRIVATE_IP"
 
 ## =============================================================================
 ## AWS認証
@@ -275,11 +282,23 @@ ec2-stop-jump: ## i-d (Jump Server)を停止
 	@INSTANCE_ID=$$(cd terraform && terraform output -raw jump_server_id 2>/dev/null); \
 	aws ec2 stop-instances --instance-ids $$INSTANCE_ID --profile $(AWS_PROFILE)
 
+.PHONY: ec2-start-terra
+ec2-start-terra: ## i-e (Terraria Server)を起動
+	@echo "▶️  i-e (Terraria Server)起動中..."
+	@INSTANCE_ID=$$(cd terraform && terraform output -raw terraria_server_instance_id 2>/dev/null); \
+	aws ec2 start-instances --instance-ids $$INSTANCE_ID --profile $(AWS_PROFILE)
+
+.PHONY: ec2-stop-terra
+ec2-stop-terra: ## i-e (Terraria Server)を停止
+	@echo "⏹️  i-e (Terraria Server)停止中..."
+	@INSTANCE_ID=$$(cd terraform && terraform output -raw terraria_server_instance_id 2>/dev/null); \
+	aws ec2 stop-instances --instance-ids $$INSTANCE_ID --profile $(AWS_PROFILE)
+
 ## =============================================================================
 ## SSM接続（ポートフォワーディング - このターミナルを占有）
 ## =============================================================================
 
-.PHONY: ssm-mc ssm-api ssm-web ssm-jump ssm-mysql ssm-postgres ssm-start-all ssm-stop-all ssm-status ssm-start-all-tmux ssm-stop-all-tmux ssm-check
+.PHONY: ssm-mc ssm-api ssm-web ssm-jump ssm-terra ssm-mysql ssm-postgres ssm-start-all ssm-stop-all ssm-status ssm-start-all-tmux ssm-stop-all-tmux ssm-check
 
 ssm-mc: ## i-a (MC Server) へポートフォワーディング (localhost:2222)
 	@echo "🔗 MC Server (i-a) へポートフォワーディングを開始します..."
@@ -381,6 +400,35 @@ ssm-jump: ## i-d (Jump Server) へSSM直接接続
 	echo ""; \
 	aws ssm start-session --target $$INSTANCE_ID --profile $(AWS_PROFILE)
 
+ssm-terra: ## i-e (Terraria Server) へポートフォワーディング (localhost:2225)
+	@echo "🔗 Terraria Server (i-e) へポートフォワーディングを開始します..."
+	@INSTANCE_ID_D=$$(aws ec2 describe-instances --profile $(AWS_PROFILE) --region $(AWS_REGION) \
+		--filters "Name=tag:Name,Values=kishax-$(ENVIRONMENT)-jump-server" "Name=instance-state-name,Values=running" \
+		--query 'Reservations[0].Instances[0].InstanceId' --output text 2>/dev/null); \
+	PRIVATE_IP_E=$$(aws ec2 describe-instances --profile $(AWS_PROFILE) --region $(AWS_REGION) \
+		--filters "Name=tag:Name,Values=kishax-$(ENVIRONMENT)-terraria-server" \
+		--query 'Reservations[0].Instances[0].PrivateIpAddress' --output text 2>/dev/null); \
+	if [ -z "$$INSTANCE_ID_D" ] || [ "$$INSTANCE_ID_D" = "None" ]; then \
+		echo "❌ Jump Serverが起動していません"; \
+		exit 1; \
+	fi; \
+	if [ -z "$$PRIVATE_IP_E" ] || [ "$$PRIVATE_IP_E" = "None" ]; then \
+		echo "❌ Terraria Serverが見つかりません"; \
+		exit 1; \
+	fi; \
+	echo "Jump Server: $$INSTANCE_ID_D"; \
+	echo "Target: $$PRIVATE_IP_E (Terraria Server)"; \
+	echo "Local Port: 2225"; \
+	echo ""; \
+	echo "✅ ポートフォワーディング開始 (このターミナルは占有されます)"; \
+	echo "📝 別ターミナルで 'make ssh-terra' を実行してSSH接続してください"; \
+	echo ""; \
+	aws ssm start-session \
+		--target $$INSTANCE_ID_D \
+		--document-name AWS-StartPortForwardingSessionToRemoteHost \
+		--parameters "{\"host\":[\"$$PRIVATE_IP_E\"],\"portNumber\":[\"22\"],\"localPortNumber\":[\"2225\"]}" \
+		--profile $(AWS_PROFILE)
+
 ssm-mysql: ## RDS MySQL へポートフォワーディング (localhost:3307)
 	@echo "🔗 RDS MySQL へポートフォワーディングを開始します..."
 	@if [ ! -f .env.auto ]; then \
@@ -467,7 +515,7 @@ ssm-check: ## ポートとプロセスの詳細確認（デバッグ用）
 ## SSH接続（純粋なSSH - 事前に ssm-* でポートフォワーディングが必要）
 ## =============================================================================
 
-.PHONY: ssh-mc ssh-api ssh-web ssh-mysql ssh-postgres delete-user login-mysql
+.PHONY: ssh-mc ssh-api ssh-web ssh-terra ssh-mysql ssh-postgres delete-user login-mysql
 
 ssh-mc: ## i-a (MC Server) へSSH接続 (要: 別ターミナルで make ssm-mc)
 	@echo "🔗 MC Server (i-a) へSSH接続します..."
@@ -515,6 +563,23 @@ ssh-web: ## i-c (Web Server) へSSH接続 (要: 別ターミナルで make ssm-w
 	echo "⚠️  事前に別ターミナルで 'make ssm-web' を実行してください"; \
 	echo ""; \
 	ssh -i $(SSH_KEY) -p 2224 \
+		-o StrictHostKeyChecking=no \
+		-o UserKnownHostsFile=/dev/null \
+		-o LogLevel=ERROR \
+		ec2-user@localhost
+
+ssh-terra: ## i-e (Terraria Server) へSSH接続 (要: 別ターミナルで make ssm-terra)
+	@echo "🔗 Terraria Server (i-e) へSSH接続します..."
+	@if [ ! -f "$(SSH_KEY)" ]; then \
+		echo "❌ SSH鍵ファイルが見つかりません: $(SSH_KEY)"; \
+		exit 1; \
+	fi; \
+	echo "SSH Key: $(SSH_KEY)"; \
+	echo "Local Port: 2225"; \
+	echo ""; \
+	echo "⚠️  事前に別ターミナルで 'make ssm-terra' を実行してください"; \
+	echo ""; \
+	ssh -i $(SSH_KEY) -p 2225 \
 		-o StrictHostKeyChecking=no \
 		-o UserKnownHostsFile=/dev/null \
 		-o LogLevel=ERROR \
@@ -1388,3 +1453,28 @@ clean: ## ローカルの一時ファイルを削除
 	rm -f terraform/.terraform.lock.hcl
 	@echo "✅ クリーンアップ完了"
 
+## 個人コマンド
+
+.PHONY: terra-upload
+terra-upload: ## Terrariaアップロード(source .env.auto から始める)
+	@bash -c ' \
+	source .env.auto; \
+	echo "🔍 S3から最新バージョンを検索中..."; \
+	LATEST_YEARMONTH=$$(aws s3 ls s3://$$S3_TERRARIA_BACKUPS_BUCKET/deployment/ | grep PRE | awk '\''{print $$2}'\'' | sed '\''s/\///'\'' | sort -r | head -n 1); \
+	LATEST_VERSION=$$(aws s3 ls s3://$$S3_TERRARIA_BACKUPS_BUCKET/deployment/$$LATEST_YEARMONTH/ | grep PRE | awk '\''{print $$2}'\'' | sed '\''s/\///'\'' | sort -rn | head -n 1); \
+	echo "📦 既存バージョンに上書き: $$LATEST_YEARMONTH/$$LATEST_VERSION"; \
+	echo "📤 アップロード中..."; \
+	aws s3 sync ./data/terraria s3://$$S3_TERRARIA_BACKUPS_BUCKET/deployment/$$LATEST_YEARMONTH/$$LATEST_VERSION/terraria/ --delete'
+	@echo "✅ Terrariaアップロード完了"
+
+.PHONY: terra-download
+terra-download: ## TerrariaをS3からダウンロード(source .env.auto から始める)
+	@bash -c ' \
+	source .env.auto; \
+	echo "🔍 S3から最新バージョンを検索中..."; \
+	LATEST_YEARMONTH=$$(aws s3 ls s3://$$S3_TERRARIA_BACKUPS_BUCKET/deployment/ | grep PRE | awk '\''{print $$2}'\'' | sed '\''s/\///'\'' | sort -r | head -n 1); \
+	LATEST_VERSION=$$(aws s3 ls s3://$$S3_TERRARIA_BACKUPS_BUCKET/deployment/$$LATEST_YEARMONTH/ | grep PRE | awk '\''{print $$2}'\'' | sed '\''s/\///'\'' | sort -rn | head -n 1); \
+	echo "📦 最新バージョン: $$LATEST_YEARMONTH/$$LATEST_VERSION"; \
+	echo "📥 ダウンロード中..."; \
+	aws s3 sync s3://$$S3_TERRARIA_BACKUPS_BUCKET/deployment/$$LATEST_YEARMONTH/$$LATEST_VERSION/terraria/ ./data/terraria/ --delete'
+	@echo "✅ Terrariaダウンロード完了"

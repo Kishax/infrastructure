@@ -41,6 +41,11 @@ variable "jump_server_sg_id" {
   type        = string
 }
 
+variable "terraria_server_sg_id" {
+  description = "Terraria Server Security Group ID"
+  type        = string
+}
+
 # IAM Instance Profiles
 variable "mc_server_instance_profile" {
   description = "MC Server IAM Instance Profile Name"
@@ -59,6 +64,11 @@ variable "web_server_instance_profile" {
 
 variable "jump_server_instance_profile" {
   description = "Jump Server IAM Instance Profile Name"
+  type        = string
+}
+
+variable "terraria_server_instance_profile" {
+  description = "Terraria Server IAM Instance Profile Name"
   type        = string
 }
 

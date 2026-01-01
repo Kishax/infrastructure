@@ -77,3 +77,4 @@ data/terraria/*
 !data/terraria/Makefile
 !data/terraria/setup
 !data/terraria/start
+!data/terraria/COMMANDS.md

@@ -2,3 +2,4 @@
 
 chmod +x start
 chmod +x TShock.Server
+chmod +x TShock.Installer

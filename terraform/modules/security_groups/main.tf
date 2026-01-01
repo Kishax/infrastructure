@@ -15,14 +15,7 @@ resource "aws_security_group" "mc_server" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  # SSH access (management)
-  ingress {
-    description = "SSH access"
-    from_port   = 22
-    to_port     = 22
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]  # TODO: Restrict to specific IP
-  }
+  # SSH access via Jump Server only (see security group rules below)
 
   # Allow all outbound traffic
   egress {
@@ -80,14 +73,7 @@ resource "aws_security_group" "api_server" {
     security_groups = [aws_security_group.web_server.id]
   }
 
-  # SSH access (management)
-  ingress {
-    description = "SSH access"
-    from_port   = 22
-    to_port     = 22
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]  # TODO: Restrict to specific IP
-  }
+  # SSH access via Jump Server only (see security group rules below)
 
   # Allow all outbound traffic
   egress {
@@ -128,14 +114,7 @@ resource "aws_security_group" "web_server" {
     cidr_blocks = ["0.0.0.0/0"]  # TODO: Restrict to CloudFront IP ranges
   }
 
-  # SSH access (management)
-  ingress {
-    description = "SSH access"
-    from_port   = 22
-    to_port     = 22
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]  # TODO: Restrict to specific IP
-  }
+  # SSH access via Jump Server only (see security group rules below)
 
   # Allow all outbound traffic
   egress {
@@ -290,14 +269,7 @@ resource "aws_security_group" "terraria_server" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  # SSH access (management)
-  ingress {
-    description = "SSH access"
-    from_port   = 22
-    to_port     = 22
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]  # TODO: Restrict to specific IP
-  }
+  # SSH access via Jump Server only (see security group rules below)
 
   # Allow all outbound traffic
   egress {

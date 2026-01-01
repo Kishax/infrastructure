@@ -351,6 +351,41 @@ resource "aws_iam_instance_profile" "jump_server" {
   role = aws_iam_role.jump_server.name
 }
 
+# Terraria Server IAM Role (i-e) - SSM Session Manager
+resource "aws_iam_role" "terraria_server" {
+  name = "kishax-${var.environment}-terraria-server-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "ec2.amazonaws.com"
+        }
+      }
+    ]
+  })
+
+  tags = {
+    Name     = "kishax-${var.environment}-terraria-server-role"
+    Instance = "i-e"
+  }
+}
+
+# Terraria Server Policy - SSM Session Manager
+resource "aws_iam_role_policy_attachment" "terraria_server_ssm" {
+  role       = aws_iam_role.terraria_server.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+}
+
+# Terraria Server Instance Profile
+resource "aws_iam_instance_profile" "terraria_server" {
+  name = "kishax-${var.environment}-terraria-server-profile"
+  role = aws_iam_role.terraria_server.name
+}
+
 # ============================================================================
 # SQS Access User (Docker containers用)
 # ============================================================================

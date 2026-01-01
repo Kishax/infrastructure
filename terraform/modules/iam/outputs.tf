@@ -40,6 +40,16 @@ output "jump_server_instance_profile_name" {
   value       = aws_iam_instance_profile.jump_server.name
 }
 
+output "terraria_server_role_name" {
+  description = "Terraria Server IAM Role Name"
+  value       = aws_iam_role.terraria_server.name
+}
+
+output "terraria_server_instance_profile_name" {
+  description = "Terraria Server Instance Profile Name"
+  value       = aws_iam_instance_profile.terraria_server.name
+}
+
 # SQS Access User Outputs
 output "sqs_access_user_name" {
   description = "SQS Access IAM User Name"
@@ -75,6 +85,7 @@ output "all_ec2_role_arns" {
     aws_iam_role.mc_server.arn,
     aws_iam_role.api_server.arn,
     aws_iam_role.web_server.arn,
-    aws_iam_role.jump_server.arn
+    aws_iam_role.jump_server.arn,
+    aws_iam_role.terraria_server.arn
   ]
 }

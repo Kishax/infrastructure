@@ -39,3 +39,16 @@ variable "cloudfront_zone_id" {
   type        = string
   default     = ""  # オプショナル
 }
+
+# Terraria Server
+variable "terraria_domain_name" {
+  description = "Terraria server domain name"
+  type        = string
+  default     = ""  # オプショナル
+}
+
+variable "terraria_server_elastic_ip" {
+  description = "Terraria Server Elastic IP"
+  type        = string
+  default     = ""  # オプショナル
+}

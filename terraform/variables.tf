@@ -43,6 +43,12 @@ variable "web_domain_name" {
   default     = "kishax.net"
 }
 
+variable "terraria_domain_name" {
+  description = "Terraria server domain name"
+  type        = string
+  default     = "tera.kishax.net"
+}
+
 # RDS PostgreSQL Configuration
 variable "postgres_instance_class" {
   description = "PostgreSQL RDS instance class"

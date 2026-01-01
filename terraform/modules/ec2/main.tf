@@ -261,3 +261,56 @@ data "aws_instance" "web_server" {
 
   depends_on = [aws_spot_instance_request.web_server]
 }
+
+# Elastic IP for Terraria Server (i-e)
+resource "aws_eip" "terraria_server" {
+  domain = "vpc"
+
+  tags = {
+    Name     = "kishax-${var.environment}-terraria-server-eip"
+    Instance = "i-e"
+  }
+}
+
+# EC2 Instance: Terraria Server (i-e)
+# - On-Demand instance (manual start/stop)
+# - t3.small
+# - Manual operation (user starts/stops when needed)
+resource "aws_instance" "terraria_server" {
+  ami           = data.aws_ami.amazon_linux_2.id
+  instance_type = "t3.small"
+
+  subnet_id                   = var.public_subnet_ids[0]
+  vpc_security_group_ids      = [var.terraria_server_sg_id]
+  associate_public_ip_address = true
+
+  iam_instance_profile = var.terraria_server_instance_profile
+  key_name            = var.ec2_key_pair_name
+
+  # User Data for basic setup
+  user_data = file("${path.module}/user-data-terraria-server.sh")
+
+  root_block_device {
+    volume_type           = "gp3"
+    volume_size           = 20  # GB
+    delete_on_termination = false  # データ保護
+    encrypted             = true
+  }
+
+  tags = {
+    Name     = "kishax-${var.environment}-terraria-server"
+    Instance = "i-e"
+    Role     = "Terraria-Server"
+    Schedule = "On-Demand"
+  }
+
+  lifecycle {
+    ignore_changes = [ami]
+  }
+}
+
+# Attach Elastic IP to Terraria Server
+resource "aws_eip_association" "terraria_server" {
+  instance_id   = aws_instance.terraria_server.id
+  allocation_id = aws_eip.terraria_server.id
+}

@@ -54,3 +54,18 @@ output "jump_server_private_ip" {
   description = "Jump Server Private IP"
   value       = aws_instance.jump_server.private_ip
 }
+
+output "terraria_server_instance_id" {
+  description = "Terraria Server Instance ID"
+  value       = aws_instance.terraria_server.id
+}
+
+output "terraria_server_elastic_ip" {
+  description = "Terraria Server Elastic IP"
+  value       = aws_eip.terraria_server.public_ip
+}
+
+output "terraria_server_private_ip" {
+  description = "Terraria Server Private IP"
+  value       = aws_instance.terraria_server.private_ip
+}

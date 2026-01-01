@@ -28,3 +28,14 @@ resource "aws_route53_record" "web" {
     evaluate_target_health = false
   }
 }
+
+# Terraria Server A Record
+resource "aws_route53_record" "terraria_server" {
+  count   = var.terraria_domain_name != "" ? 1 : 0
+  zone_id = var.route53_zone_id
+  name    = var.terraria_domain_name
+  type    = "A"
+  ttl     = 60
+
+  records = [var.terraria_server_elastic_ip]
+}

@@ -325,3 +325,115 @@ resource "aws_s3_bucket_policy" "world_backups" {
     ]
   })
 }
+
+# ============================================================================
+# Terraria Backups S3 Bucket (永続保存 - バックアップ・VM展開用)
+# ============================================================================
+
+# S3 Bucket for Terraria Server Backups
+resource "aws_s3_bucket" "terraria_backups" {
+  bucket = "kishax-${var.environment}-terraria-backups"
+
+  tags = {
+    Name        = "kishax-${var.environment}-terraria-backups"
+    Environment = var.environment
+    Purpose     = "Terraria server backups and deployment"
+  }
+}
+
+# Block all public access
+resource "aws_s3_bucket_public_access_block" "terraria_backups" {
+  bucket = aws_s3_bucket.terraria_backups.id
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+# Enable versioning
+resource "aws_s3_bucket_versioning" "terraria_backups" {
+  bucket = aws_s3_bucket.terraria_backups.id
+
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+
+# Server-side encryption
+resource "aws_s3_bucket_server_side_encryption_configuration" "terraria_backups" {
+  bucket = aws_s3_bucket.terraria_backups.id
+
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "AES256"
+    }
+  }
+}
+
+# Lifecycle rule - delete old backups
+resource "aws_s3_bucket_lifecycle_configuration" "terraria_backups" {
+  bucket = aws_s3_bucket.terraria_backups.id
+
+  rule {
+    id     = "delete-old-backups"
+    status = "Enabled"
+
+    filter {
+      prefix = "backups/"
+    }
+
+    expiration {
+      days = 180
+    }
+
+    noncurrent_version_expiration {
+      noncurrent_days = 30
+    }
+  }
+
+  # 注: deployment/プレフィックスには自動削除ルールなし（永続保存）
+}
+
+# Bucket policy to allow access from Terraria Server (i-e)
+resource "aws_s3_bucket_policy" "terraria_backups" {
+  bucket = aws_s3_bucket.terraria_backups.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "AllowTerrariaServerAccess"
+        Effect = "Allow"
+        Principal = {
+          AWS = var.ec2_instance_role_arns
+        }
+        Action = [
+          "s3:GetObject",
+          "s3:PutObject",
+          "s3:DeleteObject",
+          "s3:ListBucket"
+        ]
+        Resource = [
+          aws_s3_bucket.terraria_backups.arn,
+          "${aws_s3_bucket.terraria_backups.arn}/*"
+        ]
+      },
+      {
+        Sid    = "DenyInsecureTransport"
+        Effect = "Deny"
+        Principal = "*"
+        Action = "s3:*"
+        Resource = [
+          aws_s3_bucket.terraria_backups.arn,
+          "${aws_s3_bucket.terraria_backups.arn}/*"
+        ]
+        Condition = {
+          Bool = {
+            "aws:SecureTransport" = "false"
+          }
+        }
+      }
+    ]
+  })
+}

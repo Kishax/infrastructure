@@ -177,3 +177,13 @@ output "s3_world_backups_bucket_arn" {
   description = "S3 bucket ARN for world backups"
   value       = module.s3.world_backups_bucket_arn
 }
+
+output "s3_terraria_backups_bucket_name" {
+  description = "S3 bucket name for terraria backups"
+  value       = module.s3.terraria_backups_bucket_name
+}
+
+output "s3_terraria_backups_bucket_arn" {
+  description = "S3 bucket ARN for terraria backups"
+  value       = module.s3.terraria_backups_bucket_arn
+}

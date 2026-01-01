@@ -71,6 +71,7 @@ env-load: env-check ## Terraform outputから環境変数を読み込む
 		echo "export S3_BUCKET=\"$$(cd terraform && terraform output -raw s3_docker_images_bucket_name 2>/dev/null)\"" >> .env.auto; \
 		echo "export S3_IMAGE_MAPS_BUCKET=\"$$(cd terraform && terraform output -raw s3_image_maps_bucket_name 2>/dev/null)\"" >> .env.auto; \
 		echo "export S3_WORLD_BACKUPS_BUCKET=\"$$(cd terraform && terraform output -raw s3_world_backups_bucket_name 2>/dev/null)\"" >> .env.auto; \
+		echo "export S3_TERRARIA_BACKUPS_BUCKET=\"$$(cd terraform && terraform output -raw s3_terraria_backups_bucket_name 2>/dev/null)\"" >> .env.auto; \
 		echo "" >> .env.auto; \
 		echo "# EC2 Instance IDs" >> .env.auto; \
 		echo "export INSTANCE_ID_A=\"$$(cd terraform && terraform output -raw mc_server_instance_id 2>/dev/null)\"" >> .env.auto; \
@@ -117,6 +118,7 @@ env-show: ## 現在の環境変数を表示
 	@echo "S3_BUCKET: $$S3_BUCKET"
 	@echo "S3_IMAGE_MAPS_BUCKET: $$S3_IMAGE_MAPS_BUCKET"
 	@echo "S3_WORLD_BACKUPS_BUCKET: $$S3_WORLD_BACKUPS_BUCKET"
+	@echo "S3_TERRARIA_BACKUPS_BUCKET: $$S3_TERRARIA_BACKUPS_BUCKET"
 	@echo ""
 	@echo "=== EC2 ==="
 	@echo "INSTANCE_ID_A (MC): $$INSTANCE_ID_A"

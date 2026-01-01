@@ -1,0 +1,21 @@
+#!/bin/bash
+
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# DOTNET_ROOT を自動検出
+if [ -d "$script_dir/.NET_Runtime_6.0.16" ]; then
+    export DOTNET_ROOT="$script_dir/.NET_Runtime_6.0.16"
+else
+    export DOTNET_ROOT="/opt/terraria/.NET_Runtime_6.0.16"
+fi
+
+# --daemon フラグが指定された場合はscreenセッションで起動
+if [ "$1" = "--daemon" ]; then
+    screen -dmS terraria bash -c "cd $script_dir && ./TShock.Server -config serverconfig.txt"
+    echo "Terraria server started in screen session 'terraria'"
+    echo "To attach: screen -r terraria"
+else
+    # 通常起動（フォアグラウンド）
+    cd "$script_dir"
+    ./TShock.Server -config serverconfig.txt
+fi

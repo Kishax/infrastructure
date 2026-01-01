@@ -75,3 +75,5 @@ data/latest/
 data/home/
 data/terraria/*
 !data/terraria/Makefile
+!data/terraria/setup
+!data/terraria/start

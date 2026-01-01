@@ -1453,3 +1453,28 @@ clean: ## ローカルの一時ファイルを削除
 	rm -f terraform/.terraform.lock.hcl
 	@echo "✅ クリーンアップ完了"
 
+## 個人コマンド
+
+.PHONY: terra-upload
+terra-upload: ## Terrariaアップロード(source .env.auto から始める)
+	@bash -c ' \
+	source .env.auto; \
+	echo "🔍 S3から最新バージョンを検索中..."; \
+	LATEST_YEARMONTH=$$(aws s3 ls s3://$$S3_TERRARIA_BACKUPS_BUCKET/deployment/ | grep PRE | awk '\''{print $$2}'\'' | sed '\''s/\///'\'' | sort -r | head -n 1); \
+	LATEST_VERSION=$$(aws s3 ls s3://$$S3_TERRARIA_BACKUPS_BUCKET/deployment/$$LATEST_YEARMONTH/ | grep PRE | awk '\''{print $$2}'\'' | sed '\''s/\///'\'' | sort -rn | head -n 1); \
+	echo "📦 既存バージョンに上書き: $$LATEST_YEARMONTH/$$LATEST_VERSION"; \
+	echo "📤 アップロード中..."; \
+	aws s3 sync ./data/terraria s3://$$S3_TERRARIA_BACKUPS_BUCKET/deployment/$$LATEST_YEARMONTH/$$LATEST_VERSION/terraria/ --delete'
+	@echo "✅ Terrariaアップロード完了"
+
+.PHONY: terra-download
+terra-download: ## TerrariaをS3からダウンロード(source .env.auto から始める)
+	@bash -c ' \
+	source .env.auto; \
+	echo "🔍 S3から最新バージョンを検索中..."; \
+	LATEST_YEARMONTH=$$(aws s3 ls s3://$$S3_TERRARIA_BACKUPS_BUCKET/deployment/ | grep PRE | awk '\''{print $$2}'\'' | sed '\''s/\///'\'' | sort -r | head -n 1); \
+	LATEST_VERSION=$$(aws s3 ls s3://$$S3_TERRARIA_BACKUPS_BUCKET/deployment/$$LATEST_YEARMONTH/ | grep PRE | awk '\''{print $$2}'\'' | sed '\''s/\///'\'' | sort -rn | head -n 1); \
+	echo "📦 最新バージョン: $$LATEST_YEARMONTH/$$LATEST_VERSION"; \
+	echo "📥 ダウンロード中..."; \
+	aws s3 sync s3://$$S3_TERRARIA_BACKUPS_BUCKET/deployment/$$LATEST_YEARMONTH/$$LATEST_VERSION/terraria/ ./data/terraria/ --delete'
+	@echo "✅ Terrariaダウンロード完了"

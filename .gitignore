@@ -73,4 +73,5 @@ node_modules/
 
 data/latest/
 data/home/
-data/terraria/
+data/terraria/*
+!data/terraria/Makefile

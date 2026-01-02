@@ -95,9 +95,13 @@
 /group addperm <グループ名> <権限>
 ```
 
-**例（ボス召喚権限を追加）:**
+**例:**
 ```
+# ボス召喚権限を追加
 /group addperm default tshock.npc.summonboss
+
+# ワールド編集権限を追加
+/group addperm default tshock.world.editspawn
 ```
 
 ---

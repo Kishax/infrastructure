@@ -77,6 +77,26 @@ chown api:api /opt/api/.env
 
 echo ".env file downloaded successfully"
 
+# Download Docker images from S3
+echo "Downloading Docker images from S3..."
+aws s3 cp s3://kishax-production-docker-images/api/kishax-api-mc-auth-latest.tar.gz \
+  /tmp/kishax-api-mc-auth-latest.tar.gz --region $REGION
+aws s3 cp s3://kishax-production-docker-images/api/kishax-api-discord-bot-latest.tar.gz \
+  /tmp/kishax-api-discord-bot-latest.tar.gz --region $REGION
+aws s3 cp s3://kishax-production-docker-images/api/kishax-api-sqs-redis-bridge-web-latest.tar.gz \
+  /tmp/kishax-api-sqs-redis-bridge-web-latest.tar.gz --region $REGION
+
+# Load Docker images
+echo "Loading Docker images..."
+docker load < /tmp/kishax-api-mc-auth-latest.tar.gz
+docker load < /tmp/kishax-api-discord-bot-latest.tar.gz
+docker load < /tmp/kishax-api-sqs-redis-bridge-web-latest.tar.gz
+
+# Clean up
+rm /tmp/*.tar.gz
+
+echo "Docker images loaded successfully"
+
 # Create systemd service for API server
 cat > /etc/systemd/system/api.service <<'SERVICE'
 [Unit]

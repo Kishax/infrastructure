@@ -107,6 +107,20 @@ chown web:web /opt/web/.env
 
 echo ".env file downloaded successfully"
 
+# Download Docker image from S3
+echo "Downloading Docker image from S3..."
+aws s3 cp s3://kishax-production-docker-images/web/kishax-web-latest.tar.gz \
+  /tmp/kishax-web-latest.tar.gz --region $REGION
+
+# Load Docker image
+echo "Loading Docker image..."
+docker load < /tmp/kishax-web-latest.tar.gz
+
+# Clean up
+rm /tmp/kishax-web-latest.tar.gz
+
+echo "Docker image loaded successfully"
+
 # Create systemd service for Web application
 cat > /etc/systemd/system/web.service <<'SERVICE'
 [Unit]

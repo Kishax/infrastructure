@@ -108,6 +108,20 @@ chown minecraft:minecraft /opt/mc/.env
 
 echo ".env file downloaded successfully"
 
+# Download Docker image from S3
+echo "Downloading Docker image from S3..."
+aws s3 cp s3://kishax-production-docker-images/mc/kishax-mc-latest.tar.gz \
+  /tmp/kishax-mc-latest.tar.gz --region $REGION
+
+# Load Docker image
+echo "Loading Docker image..."
+docker load < /tmp/kishax-mc-latest.tar.gz
+
+# Clean up
+rm /tmp/kishax-mc-latest.tar.gz
+
+echo "Docker image loaded successfully"
+
 # Create systemd service for Minecraft server
 cat > /etc/systemd/system/minecraft.service <<'SERVICE'
 [Unit]

@@ -7,3 +7,6 @@
 [submodule "apps/api"]
 	path = apps/api
 	url = https://github.com/Kishax/kishax-api.git
+[submodule "apps/terraria"]
+	path = apps/terraria
+	url = https://github.com/Kishax/kishax-terraria.git

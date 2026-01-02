@@ -102,6 +102,9 @@
 
 # ワールド編集権限を追加
 /group addperm default tshock.world.editspawn
+
+# 投射物権限を追加
+/group addperm default tshock.world.projectile
 ```
 
 ---

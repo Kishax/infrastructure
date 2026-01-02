@@ -161,8 +161,11 @@ resource "aws_spot_instance_request" "web_server" {
   iam_instance_profile = var.web_server_instance_profile
   key_name            = var.ec2_key_pair_name
 
-  # User Data for Docker setup
-  user_data = file("${path.module}/user-data-web-server.sh")
+  # User Data for Docker setup + Route53 update
+  user_data = templatefile("${path.module}/user-data-web-server.sh", {
+    route53_zone_id  = var.route53_zone_id
+    web_domain_name  = var.web_domain_name
+  })
 
   root_block_device {
     volume_type           = "gp3"

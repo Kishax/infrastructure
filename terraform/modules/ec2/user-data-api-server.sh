@@ -78,6 +78,26 @@ if ! command -v aws &> /dev/null; then
     rm -rf awscliv2.zip aws
 fi
 
+# Install Git
+echo "Installing Git..."
+yum install -y git
+
+# Clone application repository
+echo "Cloning API application from GitHub..."
+cd /tmp
+git clone -b master https://github.com/Kishax/kishax-api.git api-repo
+cp -r api-repo/* /opt/api/
+rm -rf api-repo
+chown -R api:api /opt/api
+
+# Download .env file from S3
+echo "Downloading .env file from S3..."
+aws s3 cp s3://kishax-production-env-files/i-b/api/.env /opt/api/.env --region $REGION
+chmod 600 /opt/api/.env
+chown api:api /opt/api/.env
+
+echo ".env file downloaded successfully"
+
 # Create systemd service for API server (optional)
 cat > /etc/systemd/system/api.service <<'SERVICE'
 [Unit]
@@ -99,11 +119,19 @@ SERVICE
 
 echo "systemd service created at /etc/systemd/system/api.service"
 
+# Enable and start API service
+echo "Enabling and starting API service..."
+systemctl daemon-reload
+systemctl enable api.service
+systemctl start api.service
+
+# Check service status
+echo "API service status:"
+systemctl status api.service --no-pager
+
 echo "========================================="
 echo "API Server (i-b) Initialization Complete"
 echo "========================================="
 echo "Redis endpoint: $PRIVATE_IP:6379"
-echo "Next steps:"
-echo "1. Deploy docker-compose.yml to /opt/api/"
-echo "2. Configure Redis password in SSM"
-echo "3. Start service: systemctl start api"
+echo "Application deployed to: /opt/api"
+echo "Service status: $(systemctl is-active api.service)"

@@ -290,6 +290,32 @@ resource "aws_iam_role_policy_attachment" "web_server_ssm_session" {
   policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
 }
 
+# Web Server Policy - Route53 Update
+resource "aws_iam_role_policy" "web_server_route53" {
+  name = "kishax-${var.environment}-web-route53-policy"
+  role = aws_iam_role.web_server.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "route53:ChangeResourceRecordSets"
+        ]
+        Resource = "arn:aws:route53:::hostedzone/${var.route53_zone_id}"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "route53:GetChange"
+        ]
+        Resource = "*"
+      }
+    ]
+  })
+}
+
 # Web Server Policy - S3 Access (Docker Images, Env Files)
 resource "aws_iam_role_policy" "web_server_s3" {
   name = "kishax-${var.environment}-web-s3-policy"

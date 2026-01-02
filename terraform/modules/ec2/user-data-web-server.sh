@@ -1,5 +1,6 @@
 #!/bin/bash
 # Web Server (i-c) User Data Script
+# - Update Route53 record with current public IP
 # - Install Docker and Docker Compose
 # - Setup Web and Discord Bot environment
 
@@ -21,6 +22,36 @@ REGION=$(curl -s http://169.254.169.254/latest/meta-data/placement/region)
 echo "Instance ID: $INSTANCE_ID"
 echo "Public IP: $PUBLIC_IP"
 echo "Region: $REGION"
+
+# Update Route53 record for kishax.net
+echo "Updating Route53 record for ${web_domain_name}..."
+CHANGE_BATCH=$(cat <<EOF
+{
+  "Changes": [
+    {
+      "Action": "UPSERT",
+      "ResourceRecordSet": {
+        "Name": "${web_domain_name}",
+        "Type": "A",
+        "TTL": 60,
+        "ResourceRecords": [
+          {
+            "Value": "$PUBLIC_IP"
+          }
+        ]
+      }
+    }
+  ]
+}
+EOF
+)
+
+aws route53 change-resource-record-sets \
+    --hosted-zone-id ${route53_zone_id} \
+    --change-batch "$CHANGE_BATCH" \
+    --region $REGION
+
+echo "Route53 record updated successfully"
 
 # System update
 echo "Updating system packages..."
@@ -45,8 +76,7 @@ usermod -aG docker web
 # Create directories
 echo "Creating application directories..."
 mkdir -p /opt/web
-mkdir -p /opt/discord
-chown -R web:web /opt/web /opt/discord
+chown -R web:web /opt/web
 
 # Install AWS CLI (if not already installed)
 if ! command -v aws &> /dev/null; then
@@ -56,6 +86,26 @@ if ! command -v aws &> /dev/null; then
     ./aws/install
     rm -rf awscliv2.zip aws
 fi
+
+# Install Git
+echo "Installing Git..."
+yum install -y git
+
+# Clone application repository
+echo "Cloning Web application from GitHub..."
+cd /tmp
+git clone -b master https://github.com/Kishax/kishax-web.git web-repo
+cp -r web-repo/* /opt/web/
+rm -rf web-repo
+chown -R web:web /opt/web
+
+# Download .env file from S3
+echo "Downloading .env file from S3..."
+aws s3 cp s3://kishax-production-env-files/i-c/web/.env /opt/web/.env --region $REGION
+chmod 600 /opt/web/.env
+chown web:web /opt/web/.env
+
+echo ".env file downloaded successfully"
 
 # Create systemd service for Web application
 cat > /etc/systemd/system/web.service <<'SERVICE'
@@ -76,32 +126,22 @@ User=web
 WantedBy=multi-user.target
 SERVICE
 
-# Create systemd service for Discord Bot
-cat > /etc/systemd/system/discord.service <<'SERVICE'
-[Unit]
-Description=Discord Bot
-After=docker.service
-Requires=docker.service
+echo "systemd service created at /etc/systemd/system/web.service"
 
-[Service]
-Type=oneshot
-RemainAfterExit=yes
-WorkingDirectory=/opt/discord
-ExecStart=/usr/local/bin/docker-compose up -d
-ExecStop=/usr/local/bin/docker-compose down
-User=web
+# Enable and start Web service
+echo "Enabling and starting Web service..."
+systemctl daemon-reload
+systemctl enable web.service
+systemctl start web.service
 
-[Install]
-WantedBy=multi-user.target
-SERVICE
-
-echo "systemd services created"
+# Check service status
+echo "Web service status:"
+systemctl status web.service --no-pager
 
 echo "========================================="
 echo "Web Server (i-c) Initialization Complete"
 echo "========================================="
-echo "Next steps:"
-echo "1. Deploy docker-compose.yml to /opt/web/ and /opt/discord/"
-echo "2. Start services:"
-echo "   - systemctl start web"
-echo "   - systemctl start discord"
+echo "Public IP: $PUBLIC_IP"
+echo "Route53: ${web_domain_name} -> $PUBLIC_IP"
+echo "Application deployed to: /opt/web"
+echo "Service status: $(systemctl is-active web.service)"

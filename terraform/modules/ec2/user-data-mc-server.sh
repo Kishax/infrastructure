@@ -75,9 +75,9 @@ usermod -aG docker minecraft
 
 # Create directories
 echo "Creating application directories..."
-mkdir -p /opt/minecraft/data
-mkdir -p /opt/minecraft/images
-chown -R minecraft:minecraft /opt/minecraft
+mkdir -p /opt/mc/data
+mkdir -p /opt/mc/images
+chown -R minecraft:minecraft /opt/mc
 
 # Install AWS CLI (if not already installed)
 if ! command -v aws &> /dev/null; then
@@ -88,7 +88,27 @@ if ! command -v aws &> /dev/null; then
     rm -rf awscliv2.zip aws
 fi
 
-# Create systemd service for Minecraft server (optional)
+# Install Git
+echo "Installing Git..."
+yum install -y git
+
+# Clone application repository
+echo "Cloning MC application from GitHub..."
+cd /tmp
+git clone -b master https://github.com/Kishax/kishax.git mc-repo
+cp -r mc-repo/* /opt/mc/
+rm -rf mc-repo
+chown -R minecraft:minecraft /opt/mc
+
+# Download .env file from S3
+echo "Downloading .env file from S3..."
+aws s3 cp s3://kishax-production-env-files/i-a/mc/.env /opt/mc/.env --region $REGION
+chmod 600 /opt/mc/.env
+chown minecraft:minecraft /opt/mc/.env
+
+echo ".env file downloaded successfully"
+
+# Create systemd service for Minecraft server
 cat > /etc/systemd/system/minecraft.service <<'SERVICE'
 [Unit]
 Description=Minecraft Server
@@ -98,7 +118,7 @@ Requires=docker.service
 [Service]
 Type=oneshot
 RemainAfterExit=yes
-WorkingDirectory=/opt/minecraft
+WorkingDirectory=/opt/mc
 ExecStart=/usr/local/bin/docker-compose up -d
 ExecStop=/usr/local/bin/docker-compose down
 User=minecraft
@@ -107,12 +127,22 @@ User=minecraft
 WantedBy=multi-user.target
 SERVICE
 
-# Note: Docker Compose file should be deployed separately
 echo "systemd service created at /etc/systemd/system/minecraft.service"
+
+# Enable and start Minecraft service
+echo "Enabling and starting Minecraft service..."
+systemctl daemon-reload
+systemctl enable minecraft.service
+systemctl start minecraft.service
+
+# Check service status
+echo "Minecraft service status:"
+systemctl status minecraft.service --no-pager
 
 echo "========================================="
 echo "MC Server (i-a) Initialization Complete"
 echo "========================================="
-echo "Next steps:"
-echo "1. Deploy docker-compose.yml to /opt/minecraft/"
-echo "2. Start service: systemctl start minecraft"
+echo "Public IP: $PUBLIC_IP"
+echo "Route53: ${mc_domain_name} -> $PUBLIC_IP"
+echo "Application deployed to: /opt/mc"
+echo "Service status: $(systemctl is-active minecraft.service)"

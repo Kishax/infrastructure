@@ -110,6 +110,11 @@ variable "mc_domain_name" {
   type        = string
 }
 
+variable "web_domain_name" {
+  description = "Web server domain name"
+  type        = string
+}
+
 variable "ec2_key_pair_name" {
   description = "EC2 key pair name for SSH access"
   type        = string

@@ -29,24 +29,22 @@ yum update -y
 
 # Install Docker
 echo "Installing Docker..."
-yum install -y docker
-systemctl start docker
-systemctl enable docker
+sudo yum install -y docker
+sudo systemctl start docker
+sudo systemctl enable docker
+sudo usermod -aG docker ec2-user
 
-# Install Docker Compose
-echo "Installing Docker Compose..."
-curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
-chmod +x /usr/local/bin/docker-compose
-
-# Create api user
-echo "Creating api user..."
-useradd -m -s /bin/bash api
-usermod -aG docker api
+# Install Docker Compose v2
+echo "Installing Docker Compose v2..."
+sudo mkdir -p /usr/local/lib/docker/cli-plugins
+sudo curl -L "https://github.com/docker/compose/releases/download/v2.32.1/docker-compose-$(uname -s)-$(uname -m)" \
+  -o /usr/local/lib/docker/cli-plugins/docker-compose
+sudo chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
 
 # Create directories
 echo "Creating application directories..."
-mkdir -p /opt/api
-chown -R api:api /opt/api
+sudo mkdir -p /opt/api
+sudo chown -R ec2-user:ec2-user /opt/api
 
 # Install AWS CLI (if not already installed)
 if ! command -v aws &> /dev/null; then
@@ -65,15 +63,15 @@ yum install -y git
 echo "Cloning API application from GitHub..."
 cd /tmp
 git clone -b master https://github.com/Kishax/kishax-api.git api-repo
-cp -r api-repo/* /opt/api/
+sudo cp -r api-repo/* /opt/api/
 rm -rf api-repo
-chown -R api:api /opt/api
+sudo chown -R ec2-user:ec2-user /opt/api
 
 # Download .env file from S3
 echo "Downloading .env file from S3..."
 aws s3 cp s3://kishax-production-env-files/i-b/api/.env /opt/api/.env --region $REGION
-chmod 600 /opt/api/.env
-chown api:api /opt/api/.env
+sudo chmod 600 /opt/api/.env
+sudo chown ec2-user:ec2-user /opt/api/.env
 
 echo ".env file downloaded successfully"
 
@@ -108,9 +106,9 @@ Requires=docker.service
 Type=oneshot
 RemainAfterExit=yes
 WorkingDirectory=/opt/api
-ExecStart=/usr/local/bin/docker-compose up -d
-ExecStop=/usr/local/bin/docker-compose down
-User=api
+ExecStart=/usr/local/lib/docker/cli-plugins/docker-compose up -d
+ExecStop=/usr/local/lib/docker/cli-plugins/docker-compose down
+User=ec2-user
 
 [Install]
 WantedBy=multi-user.target

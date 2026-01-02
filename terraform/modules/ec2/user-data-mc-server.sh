@@ -59,25 +59,23 @@ yum update -y
 
 # Install Docker
 echo "Installing Docker..."
-yum install -y docker
-systemctl start docker
-systemctl enable docker
+sudo yum install -y docker
+sudo systemctl start docker
+sudo systemctl enable docker
+sudo usermod -aG docker ec2-user
 
-# Install Docker Compose
-echo "Installing Docker Compose..."
-curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
-chmod +x /usr/local/bin/docker-compose
-
-# Create minecraft user
-echo "Creating minecraft user..."
-useradd -m -s /bin/bash minecraft
-usermod -aG docker minecraft
+# Install Docker Compose v2
+echo "Installing Docker Compose v2..."
+sudo mkdir -p /usr/local/lib/docker/cli-plugins
+sudo curl -L "https://github.com/docker/compose/releases/download/v2.32.1/docker-compose-$(uname -s)-$(uname -m)" \
+  -o /usr/local/lib/docker/cli-plugins/docker-compose
+sudo chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
 
 # Create directories
 echo "Creating application directories..."
-mkdir -p /opt/mc/data
-mkdir -p /opt/mc/images
-chown -R minecraft:minecraft /opt/mc
+sudo mkdir -p /opt/mc/data
+sudo mkdir -p /opt/mc/images
+sudo chown -R ec2-user:ec2-user /opt/mc
 
 # Install AWS CLI (if not already installed)
 if ! command -v aws &> /dev/null; then
@@ -96,15 +94,15 @@ yum install -y git
 echo "Cloning MC application from GitHub..."
 cd /tmp
 git clone -b master https://github.com/Kishax/kishax.git mc-repo
-cp -r mc-repo/* /opt/mc/
+sudo cp -r mc-repo/* /opt/mc/
 rm -rf mc-repo
-chown -R minecraft:minecraft /opt/mc
+sudo chown -R ec2-user:ec2-user /opt/mc
 
 # Download .env file from S3
 echo "Downloading .env file from S3..."
 aws s3 cp s3://kishax-production-env-files/i-a/mc/.env /opt/mc/.env --region $REGION
-chmod 600 /opt/mc/.env
-chown minecraft:minecraft /opt/mc/.env
+sudo chmod 600 /opt/mc/.env
+sudo chown ec2-user:ec2-user /opt/mc/.env
 
 echo ".env file downloaded successfully"
 
@@ -133,9 +131,9 @@ Requires=docker.service
 Type=oneshot
 RemainAfterExit=yes
 WorkingDirectory=/opt/mc
-ExecStart=/usr/local/bin/docker-compose up -d
-ExecStop=/usr/local/bin/docker-compose down
-User=minecraft
+ExecStart=/usr/local/lib/docker/cli-plugins/docker-compose up -d
+ExecStop=/usr/local/lib/docker/cli-plugins/docker-compose down
+User=ec2-user
 
 [Install]
 WantedBy=multi-user.target

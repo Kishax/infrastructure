@@ -38,27 +38,6 @@ echo "Installing Docker Compose..."
 curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
 chmod +x /usr/local/bin/docker-compose
 
-# Install Redis
-echo "Installing Redis..."
-yum install -y redis
-
-# Configure Redis for network access
-echo "Configuring Redis..."
-sed -i 's/^bind 127.0.0.1/bind 0.0.0.0/' /etc/redis.conf
-sed -i 's/^protected-mode yes/protected-mode no/' /etc/redis.conf
-
-# Set Redis password (should be stored in SSM and retrieved)
-# For now, using a placeholder
-# REDIS_PASSWORD=$(aws ssm get-parameter --name /kishax/redis/password --with-decryption --query 'Parameter.Value' --output text --region $REGION)
-# echo "requirepass $REDIS_PASSWORD" >> /etc/redis.conf
-
-# Start Redis
-systemctl start redis
-systemctl enable redis
-
-echo "Redis status:"
-systemctl status redis --no-pager
-
 # Create api user
 echo "Creating api user..."
 useradd -m -s /bin/bash api
@@ -98,12 +77,12 @@ chown api:api /opt/api/.env
 
 echo ".env file downloaded successfully"
 
-# Create systemd service for API server (optional)
+# Create systemd service for API server
 cat > /etc/systemd/system/api.service <<'SERVICE'
 [Unit]
 Description=API Server
-After=docker.service redis.service
-Requires=docker.service redis.service
+After=docker.service
+Requires=docker.service
 
 [Service]
 Type=oneshot
@@ -132,6 +111,5 @@ systemctl status api.service --no-pager
 echo "========================================="
 echo "API Server (i-b) Initialization Complete"
 echo "========================================="
-echo "Redis endpoint: $PRIVATE_IP:6379"
 echo "Application deployed to: /opt/api"
 echo "Service status: $(systemctl is-active api.service)"

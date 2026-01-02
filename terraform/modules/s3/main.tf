@@ -449,7 +449,7 @@ resource "aws_s3_bucket" "env_files" {
   tags = {
     Name        = "kishax-${var.environment}-env-files"
     Environment = var.environment
-    Purpose     = "Environment files (.env) storage - encrypted and persistent"
+    Purpose     = "Environment files storage - encrypted and persistent"
   }
 }
 

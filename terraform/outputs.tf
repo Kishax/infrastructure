@@ -187,3 +187,13 @@ output "s3_terraria_backups_bucket_arn" {
   description = "S3 bucket ARN for terraria backups"
   value       = module.s3.terraria_backups_bucket_arn
 }
+
+output "s3_env_files_bucket_name" {
+  description = "S3 bucket name for environment files (.env)"
+  value       = module.s3.env_files_bucket_name
+}
+
+output "s3_env_files_bucket_arn" {
+  description = "S3 bucket ARN for environment files"
+  value       = module.s3.env_files_bucket_arn
+}

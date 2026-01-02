@@ -437,3 +437,91 @@ resource "aws_s3_bucket_policy" "terraria_backups" {
     ]
   })
 }
+
+# ============================================================================
+# Environment Files S3 Bucket (.env専用 - 永続保存)
+# ============================================================================
+
+# S3 Bucket for Environment Files (.env)
+resource "aws_s3_bucket" "env_files" {
+  bucket = "kishax-${var.environment}-env-files"
+
+  tags = {
+    Name        = "kishax-${var.environment}-env-files"
+    Environment = var.environment
+    Purpose     = "Environment files (.env) storage - encrypted and persistent"
+  }
+}
+
+# Block all public access
+resource "aws_s3_bucket_public_access_block" "env_files" {
+  bucket = aws_s3_bucket.env_files.id
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+# Enable versioning
+resource "aws_s3_bucket_versioning" "env_files" {
+  bucket = aws_s3_bucket.env_files.id
+
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+
+# Server-side encryption
+resource "aws_s3_bucket_server_side_encryption_configuration" "env_files" {
+  bucket = aws_s3_bucket.env_files.id
+
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "AES256"
+    }
+  }
+}
+
+# No lifecycle rule - keep .env files indefinitely
+
+# Bucket policy to allow read access from all EC2 instances
+resource "aws_s3_bucket_policy" "env_files" {
+  bucket = aws_s3_bucket.env_files.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "AllowEC2InstancesReadAccess"
+        Effect = "Allow"
+        Principal = {
+          AWS = var.ec2_instance_role_arns
+        }
+        Action = [
+          "s3:GetObject",
+          "s3:ListBucket"
+        ]
+        Resource = [
+          aws_s3_bucket.env_files.arn,
+          "${aws_s3_bucket.env_files.arn}/*"
+        ]
+      },
+      {
+        Sid    = "DenyInsecureTransport"
+        Effect = "Deny"
+        Principal = "*"
+        Action = "s3:*"
+        Resource = [
+          aws_s3_bucket.env_files.arn,
+          "${aws_s3_bucket.env_files.arn}/*"
+        ]
+        Condition = {
+          Bool = {
+            "aws:SecureTransport" = "false"
+          }
+        }
+      }
+    ]
+  })
+}

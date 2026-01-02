@@ -74,6 +74,7 @@ module "iam" {
   s3_docker_images_bucket_arn = module.s3.bucket_arn
   s3_image_maps_bucket_arn    = module.s3.image_maps_bucket_arn
   s3_world_backups_bucket_arn = module.s3.world_backups_bucket_arn
+  s3_env_files_bucket_arn     = module.s3.env_files_bucket_arn
 }
 
 # RDS Module

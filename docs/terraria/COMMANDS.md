@@ -105,6 +105,13 @@
 
 # 投射物権限を追加
 /group addperm default tshock.world.projectile
+
+# テレポート権限を追加
+/group addperm default tshock.tp.item
+
+# テレポート権限を追加
+/group addperm default tshock.tp.hook
+/group addperm default tshock.tp.*
 ```
 
 ---

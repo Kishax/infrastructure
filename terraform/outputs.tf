@@ -197,3 +197,25 @@ output "s3_env_files_bucket_arn" {
   description = "S3 bucket ARN for environment files"
   value       = module.s3.env_files_bucket_arn
 }
+
+# Lambda Outputs
+output "ec2_scheduler_function_name" {
+  description = "EC2 Scheduler Lambda function name"
+  value       = module.lambda.ec2_scheduler_function_name
+}
+
+output "ec2_scheduler_function_arn" {
+  description = "EC2 Scheduler Lambda function ARN"
+  value       = module.lambda.ec2_scheduler_function_arn
+}
+
+# EventBridge Outputs
+output "start_schedule_arn" {
+  description = "EventBridge start schedule ARN"
+  value       = module.eventbridge.start_schedule_arn
+}
+
+output "stop_schedule_arn" {
+  description = "EventBridge stop schedule ARN"
+  value       = module.eventbridge.stop_schedule_arn
+}

@@ -179,3 +179,21 @@ module "route53" {
   terraria_domain_name         = var.terraria_domain_name
   terraria_server_elastic_ip   = module.ec2.terraria_server_elastic_ip
 }
+
+# Lambda Module - EC2 Scheduler
+module "lambda" {
+  source = "./modules/lambda"
+
+  environment = var.environment
+}
+
+# EventBridge Module - EC2 Scheduler
+module "eventbridge" {
+  source = "./modules/eventbridge"
+
+  environment            = var.environment
+  lambda_function_arn    = module.lambda.ec2_scheduler_function_arn
+  mc_server_instance_id  = module.ec2.mc_server_instance_id
+  api_server_instance_id = module.ec2.api_server_instance_id
+  web_server_instance_id = module.ec2.web_server_instance_id
+}

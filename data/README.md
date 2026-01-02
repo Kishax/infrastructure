@@ -1,3 +1,6 @@
+こちらは初期に使っていたものです。
+今ではDockerに置き換わったので、使われていません。
+
 以下のディレクトリ構造でスクリプト: [scripts/upload-world-to-s3.sh](scripts/upload-world-to-s3.sh) を使用して、最新のワールドデータをS3バケットにアップロードします。
 ```
 # Directory Structure

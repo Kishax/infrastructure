@@ -59,24 +59,22 @@ yum update -y
 
 # Install Docker
 echo "Installing Docker..."
-yum install -y docker
-systemctl start docker
-systemctl enable docker
+sudo yum install -y docker
+sudo systemctl start docker
+sudo systemctl enable docker
+sudo usermod -aG docker ec2-user
 
-# Install Docker Compose
-echo "Installing Docker Compose..."
-curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
-chmod +x /usr/local/bin/docker-compose
-
-# Create web user
-echo "Creating web user..."
-useradd -m -s /bin/bash web
-usermod -aG docker web
+# Install Docker Compose v2
+echo "Installing Docker Compose v2..."
+sudo mkdir -p /usr/local/lib/docker/cli-plugins
+sudo curl -L "https://github.com/docker/compose/releases/download/v2.32.1/docker-compose-$(uname -s)-$(uname -m)" \
+  -o /usr/local/lib/docker/cli-plugins/docker-compose
+sudo chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
 
 # Create directories
 echo "Creating application directories..."
-mkdir -p /opt/web
-chown -R web:web /opt/web
+sudo mkdir -p /opt/web
+sudo chown -R ec2-user:ec2-user /opt/web
 
 # Install AWS CLI (if not already installed)
 if ! command -v aws &> /dev/null; then
@@ -95,15 +93,15 @@ yum install -y git
 echo "Cloning Web application from GitHub..."
 cd /tmp
 git clone -b master https://github.com/Kishax/kishax-web.git web-repo
-cp -r web-repo/* /opt/web/
+sudo cp -r web-repo/* /opt/web/
 rm -rf web-repo
-chown -R web:web /opt/web
+sudo chown -R ec2-user:ec2-user /opt/web
 
 # Download .env file from S3
 echo "Downloading .env file from S3..."
 aws s3 cp s3://kishax-production-env-files/i-c/web/.env /opt/web/.env --region $REGION
-chmod 600 /opt/web/.env
-chown web:web /opt/web/.env
+sudo chmod 600 /opt/web/.env
+sudo chown ec2-user:ec2-user /opt/web/.env
 
 echo ".env file downloaded successfully"
 
@@ -132,9 +130,9 @@ Requires=docker.service
 Type=oneshot
 RemainAfterExit=yes
 WorkingDirectory=/opt/web
-ExecStart=/usr/local/bin/docker-compose up -d
-ExecStop=/usr/local/bin/docker-compose down
-User=web
+ExecStart=/usr/local/lib/docker/cli-plugins/docker-compose up -d
+ExecStop=/usr/local/lib/docker/cli-plugins/docker-compose down
+User=ec2-user
 
 [Install]
 WantedBy=multi-user.target

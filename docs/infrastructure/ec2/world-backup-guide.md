@@ -1,8 +1,13 @@
 # Minecraft World S3 Backup Guide
 
 **作成日**: 2025-12-31
-**バージョン**: 1.0.0
+**更新日**: 2026-01-04
+**バージョン**: 2.0.0 (廃止予定)
 **対象環境**: Production (ap-northeast-1)
+
+> ⚠️ **廃止予定**: `backups/` パスは廃止されました。現在は `deployment/` と `workspace/` の2つのパスを使用します。
+>
+> 詳細は [Minecraft World S3アーキテクチャ](./world-s3-architecture.md) を参照してください。
 
 ---
 
@@ -86,53 +91,53 @@ s3://kishax-production-world-backups/
 
 ---
 
-## デプロイメント (deployment/) との違い
+## 新しいS3アーキテクチャ (v2.0.0)
 
-同じS3バケット内に `deployment/` と `backups/` の2つのプレフィックスが存在します。それぞれ異なる目的で使用されます。
+> ⚠️ **重要**: `backups/` は廃止され、`deployment/` と `workspace/` の2つのパスに統合されました。
 
-### deployment/ - デプロイメント用
+### 現在のS3構造
 
 ```
 s3://kishax-production-world-backups/
-└── deployment/
-    └── YYYYMM/                # 年月 (例: 202512)
-        └── <version>/         # バージョン番号 (例: 1, 2, ...)
-            └── <server_name>/ # サーバー名 (例: home, latest)
-                ├── world/               # オーバーワールド (非圧縮)
-                ├── world_nether/        # ネザー (非圧縮)
-                ├── world_the_end/       # ジ・エンド (非圧縮)
-                ├── world_the_creative/  # クリエイティブ (latestのみ、非圧縮)
-                ├── metadata.json        # メタデータ
-                └── __IMPORT_ENABLED__   # インポート許可フラグ
+│
+├── deployment/          # 本番デプロイメント用（圧縮）
+│   └── YYYYMM/version/server/
+│       ├── world.tar.gz
+│       ├── world_nether.tar.gz
+│       └── ...
+│
+└── workspace/           # 実験用作業スペース（非圧縮）
+    └── server/
+        ├── world/
+        ├── world_nether/
+        └── ...
 ```
 
-**用途**: EC2初回起動時の自動インポート ([import-world-from-s3.sh](../../apps/mc/docker/scripts/import-world-from-s3.sh))
+### 移行ガイド
 
-**特徴**:
-- **非圧縮**: `aws s3 sync` で直接アップロード/ダウンロード (高速)
-- **永続保存**: ライフサイクルポリシーなし (自動削除されない)
-- **バージョン管理**: YYYYMM + バージョン番号
-- **フラグ**: `__IMPORT_ENABLED__` (このフラグがあるデータのみインポート対象)
+| 旧 backups/ の用途 | 新しい方法 |
+|------------------|----------|
+| 定期バックアップ | `make deploy-world` (deployment/へ圧縮保存) |
+| 実験前のバックアップ | `make workspace-upload` (workspace/へ非圧縮保存) |
+| バックアップからの復元 | deployment/から自動インポート、またはworkspace/から復元 |
 
-### backups/ - バックアップ用 (このドキュメントの対象)
+詳細は [Minecraft World S3アーキテクチャ](./world-s3-architecture.md) を参照してください。
 
-**用途**: 定期バックアップと災害復旧
+---
+
+## 旧バックアップシステム (backups/) - 廃止済み
+
+以下は参考情報として残しています。
+
+### 旧 backups/ の特徴
+
+**用途**: 定期バックアップと災害復旧（廃止）
 
 **特徴**:
 - **圧縮**: tar.gz形式 (ストレージコスト削減)
 - **自動削除**: 180日で削除 (ライフサイクルポリシー)
 - **日付管理**: YYYYMMDD
 - **フラグ**: `__BACKUP_COMPLETED__`
-
-### どちらを使うべきか？
-
-| 用途 | 使用するプレフィックス | コマンド |
-|------|---------------------|----------|
-| **EC2初回起動時の自動インポート** | `deployment/` | `make deploy-world` |
-| **定期バックアップ (災害復旧)** | `backups/` | `make backup-world` |
-| **手動復元 (トラブル時)** | `backups/` | `make backup-world-restore` |
-
-**Note**: `deployment/` のデータは servers.json で `s3import: true` を設定すると、初回起動時に自動的にインポートされます。
 
 ---
 

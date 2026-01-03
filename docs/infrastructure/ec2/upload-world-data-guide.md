@@ -1,8 +1,13 @@
 # MCサーバーワールドデータのS3アップロード手順
 
+**更新日**: 2026-01-04
+**バージョン**: 2.0.0
+
 ## 概要
 
 既存のMinecraftサーバーワールドデータを`kishax-production-world-backups`バケットにアップロードします。
+
+> ℹ️ **v2.0.0の変更**: deployment/は**圧縮形式（tar.gz）**に変更されました。詳細は [Minecraft World S3アーキテクチャ](./world-s3-architecture.md) を参照してください。
 
 ## 📁 データ構造
 
@@ -20,23 +25,28 @@ data/
     └── world_the_end/
 ```
 
-### S3アップロード先
+### S3アップロード先（v2.0.0: 圧縮形式）
 ```
-s3://kishax-production-world-backups/deployment/202512/1/
+s3://kishax-production-world-backups/deployment/202601/1/
 ├── latest/
-│   ├── world/
-│   ├── world_nether/
-│   ├── world_the_end/
-│   ├── world_the_creative/
+│   ├── world.tar.gz                 # 圧縮（オーバーワールド）
+│   ├── world_nether.tar.gz          # 圧縮（ネザー）
+│   ├── world_the_end.tar.gz         # 圧縮（ジ・エンド）
+│   ├── world_the_creative.tar.gz    # 圧縮（クリエイティブ）
 │   ├── metadata.json
 │   └── __IMPORT_ENABLED__
 └── home/
-    ├── world/
-    ├── world_nether/
-    ├── world_the_end/
+    ├── world.tar.gz                 # 圧縮（オーバーワールド）
+    ├── world_nether.tar.gz          # 圧縮（ネザー）
+    ├── world_the_end.tar.gz         # 圧縮（ジ・エンド）
     ├── metadata.json
     └── __IMPORT_ENABLED__
 ```
+
+**変更点**:
+- ✅ 全ワールドがtar.gz形式で圧縮保存
+- ✅ ストレージコスト削減
+- ✅ 転送時間短縮
 
 ---
 
@@ -52,35 +62,46 @@ aws sso login --profile AdministratorAccess-126112056177
 aws sts get-caller-identity --profile AdministratorAccess-126112056177
 ```
 
-### ステップ2: ドライラン（テスト実行）
+### ステップ2: EC2でスクリプト実行（v2.0.0）
+
+> ⚠️ **重要**: v2.0.0ではEC2インスタンス内のDockerコンテナから実行します。
 
 ```bash
-# 何がアップロードされるか確認（実際にはアップロードしない）
-./scripts/upload-world-to-s3.sh --dry-run
+# EC2 i-a に接続
+cd /opt/mc
+
+# ドライラン（テスト実行）
+docker exec -it kishax-minecraft /mc/scripts/deploy-world-to-s3.sh --dry-run
+
+# 本番実行
+docker exec -it kishax-minecraft /mc/scripts/deploy-world-to-s3.sh
+# または
+make deploy-world
 ```
 
 **確認項目:**
-- ✅ データサイズが正しいか
-- ✅ アップロード先のパスが正しいか
-- ✅ 全てのワールドディレクトリが検出されているか
-
-### ステップ3: 本番アップロード
-
-```bash
-# 実際にアップロード
-./scripts/upload-world-to-s3.sh
-```
+- ✅ 検出されたワールド: world, world_nether, world_the_end, world_the_creative
+- ✅ 圧縮レベル: 6（デフォルト）
+- ✅ アップロード先: deployment/YYYYMM/version/
 
 **プロンプト:**
 ```
-⚠️  実際にS3にアップロードします
-続行しますか？ (yes/no): yes
+⚠️  デプロイメント用データとしてS3にアップロードします (Version: 1)
+デプロイを開始しますか？ (y/N): y
 ```
 
-**所要時間（目安）:**
-- `latest` (8.9GB): 約15-20分
-- `home` (709MB): 約2-3分
-- **合計**: 約20-25分
+**処理の流れ**:
+1. ワールドディレクトリを動的検出
+2. 各ワールドをtar.gz形式で圧縮
+3. S3へアップロード
+4. メタデータ作成
+5. `__IMPORT_ENABLED__` フラグ作成
+
+**所要時間（目安）v2.0.0:**
+- 圧縮時間含む
+- `latest` (8.9GB → 約2GB圧縮後): 約10-15分
+- `home` (709MB → 約200MB圧縮後): 約2-3分
+- **合計**: 約15-20分（圧縮により短縮）
 
 ---
 

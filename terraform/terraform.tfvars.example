@@ -32,3 +32,51 @@ acm_certificate_arn = "arn:aws:acm:us-east-1:123456789012:certificate/xxxxx"  # 
 
 # EC2
 ec2_key_pair_name = "kishax-ec2-key"
+
+# ===================================
+# SSM Parameter Store Configuration
+# ===================================
+
+# Shared Parameters
+sqs_access_key_id      = "AKIAIOSFODNN7EXAMPLE"
+sqs_secret_access_key  = "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+to_web_queue_url       = "https://sqs.ap-northeast-1.amazonaws.com/123456789012/kishax-production-to-web-queue"
+to_mc_queue_url        = "https://sqs.ap-northeast-1.amazonaws.com/123456789012/kishax-production-to-mc-queue"
+to_discord_queue_url   = "https://sqs.ap-northeast-1.amazonaws.com/123456789012/kishax-production-discord-queue"
+auth_api_key           = "your-auth-api-key-here"
+
+# MC Server Parameters
+mc_overall_memory      = "8.0"
+mc_seed_env            = "production"
+mc_confirm_base_url    = "https://kishax.net"
+mc_kishax_api_branch   = "master"
+
+# Web Server Parameters
+web_nextauth_secret         = "your-nextauth-secret-here"
+web_google_client_id        = "your-google-client-id.apps.googleusercontent.com"
+web_google_client_secret    = "your-google-client-secret"
+web_discord_client_id       = "your-discord-client-id"
+web_discord_client_secret   = "your-discord-client-secret"
+web_twitter_client_id       = "your-twitter-client-id"
+web_twitter_client_secret   = "your-twitter-client-secret"
+web_email_host              = "email-smtp.ap-northeast-1.amazonaws.com"
+web_email_user              = "AKIAIOSFODNN7EXAMPLE"
+web_email_pass              = "your-email-smtp-password"
+web_email_from              = "support@kishax.net"
+web_internal_api_key        = "your-internal-api-key"
+
+# API Server Parameters
+api_discord_token            = "your-discord-bot-token"
+api_discord_channel_id       = "1234567890123456789"
+api_discord_chat_channel_id  = "1234567890123456789"
+api_discord_admin_channel_id = "1234567890123456789"
+api_discord_rule_channel_id  = "1234567890123456789"
+api_discord_rule_message_id  = "1234567890123456789"
+api_discord_guild_id         = "1234567890123456789"
+
+# Terraria Server Parameters
+terraria_s3_bucket          = "kishax-production-terraria-backups"
+terraria_server_password    = "your-terraria-password"
+terraria_discord_bot_token  = "your-terraria-discord-bot-token"
+terraria_discord_channel_id = "1234567890123456789"
+terraria_rest_api_token     = "your-terraria-rest-api-token"

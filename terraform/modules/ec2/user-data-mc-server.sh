@@ -98,13 +98,94 @@ sudo cp -r mc-repo/* /opt/mc/
 rm -rf mc-repo
 sudo chown -R ec2-user:ec2-user /opt/mc
 
-# Download .env file from S3
-echo "Downloading .env file from S3..."
-aws s3 cp s3://kishax-production-env-files/i-a/mc/.env /opt/mc/.env --region $REGION
+# Generate .env file from SSM Parameter Store
+echo "Generating .env file from SSM Parameter Store..."
+
+# Function to get SSM parameter
+get_param() {
+  aws ssm get-parameter --region $REGION --name "$1" --query 'Parameter.Value' --output text 2>/dev/null || echo ""
+}
+
+# Function to get SSM parameter with decryption (for SecureString)
+get_secret_param() {
+  aws ssm get-parameter --region $REGION --name "$1" --with-decryption --query 'Parameter.Value' --output text 2>/dev/null || echo ""
+}
+
+# Get dynamic API server private IP
+API_PRIVATE_IP=$(get_param "/kishax/production/dynamic/api_server_private_ip")
+REDIS_MC_PORT=$(get_param "/kishax/production/dynamic/redis_mc_port")
+
+# Wait for API server to register its IP (max 60 seconds)
+COUNTER=0
+while [ -z "$API_PRIVATE_IP" ] || [ "$API_PRIVATE_IP" = "0.0.0.0" ]; do
+  if [ $COUNTER -ge 12 ]; then
+    echo "Warning: API server private IP not available after 60 seconds, using placeholder"
+    API_PRIVATE_IP="0.0.0.0"
+    break
+  fi
+  echo "Waiting for API server to register its private IP... ($COUNTER/12)"
+  sleep 5
+  API_PRIVATE_IP=$(get_param "/kishax/production/dynamic/api_server_private_ip")
+  COUNTER=$((COUNTER + 1))
+done
+
+echo "API Server Private IP: $API_PRIVATE_IP"
+
+# Generate .env file
+cat > /opt/mc/.env <<EOF
+# ===================================
+# MC Server Configuration (i-a, EC2)
+# ===================================
+
+# Overall Memory Configuration
+OVERALL_MEMORY=$(get_param "/kishax/production/mc/overall_memory")
+
+# MySQL Configuration (RDS MySQL)
+MYSQL_HOST=$(get_param "/kishax/production/shared/mysql_host")
+MYSQL_DATABASE=$(get_param "/kishax/production/shared/mysql_database")
+MYSQL_USER=$(get_param "/kishax/production/shared/mysql_user")
+MYSQL_PASSWORD='$(get_secret_param "/kishax/production/shared/mysql_password")'
+
+# Seed Control (production: skip seeds, development: load seeds)
+SEED_ENV=$(get_param "/kishax/production/mc/seed_env")
+
+# Auth API Configuration (i-b)
+AUTH_API_URL=http://${API_PRIVATE_IP}:8080
+AUTH_API_KEY=$(get_secret_param "/kishax/production/shared/auth_api_key")
+MC_CONFIRM_BASE_URL=$(get_param "/kishax/production/mc/mc_confirm_base_url")
+
+# AWS SQS Configuration
+AWS_REGION=$(get_param "/kishax/production/shared/aws_region")
+MC_WEB_SQS_ACCESS_KEY_ID=$(get_param "/kishax/production/shared/sqs_access_key_id")
+MC_WEB_SQS_SECRET_ACCESS_KEY=$(get_secret_param "/kishax/production/shared/sqs_secret_access_key")
+TO_WEB_QUEUE_URL=$(get_param "/kishax/production/shared/to_web_queue_url")
+TO_MC_QUEUE_URL=$(get_param "/kishax/production/shared/to_mc_queue_url")
+TO_DISCORD_QUEUE_URL=$(get_param "/kishax/production/shared/to_discord_queue_url")
+
+# Redis Configuration (i-b host Redis #1)
+REDIS_URL=redis://${API_PRIVATE_IP}:${REDIS_MC_PORT}
+REDIS_CONNECTION_TIMEOUT=$(get_param "/kishax/production/mc/redis_connection_timeout")
+REDIS_COMMAND_TIMEOUT=$(get_param "/kishax/production/mc/redis_command_timeout")
+
+# Queue Configuration
+QUEUE_MODE=$(get_param "/kishax/production/mc/queue_mode")
+SQS_WORKER_ENABLED=$(get_param "/kishax/production/mc/sqs_worker_enabled")
+SQS_WORKER_POLLING_INTERVAL_SECONDS=$(get_param "/kishax/production/mc/sqs_worker_polling_interval_seconds")
+SQS_WORKER_MAX_MESSAGES=$(get_param "/kishax/production/mc/sqs_worker_max_messages")
+SQS_WORKER_WAIT_TIME_SECONDS=$(get_param "/kishax/production/mc/sqs_worker_wait_time_seconds")
+SQS_WORKER_VISIBILITY_TIMEOUT_SECONDS=$(get_param "/kishax/production/mc/sqs_worker_visibility_timeout_seconds")
+
+# Logging Configuration
+LOG_LEVEL=$(get_param "/kishax/production/mc/log_level")
+
+# Kishax APIをDocker環境でビルドするときのGithubのブランチ名
+KISHAX_API_BRANCH=$(get_param "/kishax/production/mc/kishax_api_branch")
+EOF
+
 sudo chmod 600 /opt/mc/.env
 sudo chown ec2-user:ec2-user /opt/mc/.env
 
-echo ".env file downloaded successfully"
+echo ".env file generated successfully from SSM Parameter Store"
 
 # Download Docker image from S3
 echo "Downloading Docker image from S3..."

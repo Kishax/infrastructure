@@ -66,13 +66,52 @@ sudo cp -r terraria-repo/* /opt/terraria/
 rm -rf terraria-repo
 sudo chown -R ec2-user:ec2-user /opt/terraria
 
-# Download .env file from S3
-echo "Downloading .env file from S3..."
-aws s3 cp s3://kishax-production-env-files/i-e/terraria/.env /opt/terraria/.env --region $REGION
+# Generate .env file from SSM Parameter Store
+echo "Generating .env file from SSM Parameter Store..."
+
+# Function to get SSM parameter
+get_param() {
+  aws ssm get-parameter --region $REGION --name "$1" --query 'Parameter.Value' --output text 2>/dev/null || echo ""
+}
+
+# Function to get SSM parameter with decryption (for SecureString)
+get_secret_param() {
+  aws ssm get-parameter --region $REGION --name "$1" --with-decryption --query 'Parameter.Value' --output text 2>/dev/null || echo ""
+}
+
+# Generate .env file
+cat > /opt/terraria/.env <<EOF
+# ===================================
+# Terraria Server Configuration
+# ===================================
+
+# S3 Configuration
+AWS_REGION=$(get_param "/kishax/production/shared/aws_region")
+S3_BUCKET=$(get_param "/kishax/production/terraria/s3_bucket")
+S3_DOWNLOAD_ENABLED=$(get_param "/kishax/production/terraria/s3_download_enabled")
+
+# TShock Server Configuration
+SERVER_PASSWORD=$(get_secret_param "/kishax/production/terraria/server_password")
+SERVER_PORT=$(get_param "/kishax/production/terraria/server_port")
+MAX_SLOTS=$(get_param "/kishax/production/terraria/max_slots")
+SERVER_NAME=$(get_param "/kishax/production/terraria/server_name")
+
+# Discord Bot Configuration (TerrariaChatRelay)
+DISCORD_BOT_TOKEN=$(get_secret_param "/kishax/production/terraria/discord_bot_token")
+DISCORD_CHANNEL_ID=$(get_param "/kishax/production/terraria/discord_channel_id")
+
+# TShock REST API Configuration
+REST_API_ENABLED=$(get_param "/kishax/production/terraria/rest_api_enabled")
+REST_API_PORT=$(get_param "/kishax/production/terraria/rest_api_port")
+REST_API_TOKEN=$(get_secret_param "/kishax/production/terraria/rest_api_token")
+REST_API_USERNAME=$(get_param "/kishax/production/terraria/rest_api_username")
+REST_API_USERGROUP=$(get_param "/kishax/production/terraria/rest_api_usergroup")
+EOF
+
 sudo chmod 600 /opt/terraria/.env
 sudo chown ec2-user:ec2-user /opt/terraria/.env
 
-echo ".env file downloaded successfully"
+echo ".env file generated successfully from SSM Parameter Store"
 
 # Download Docker image from S3
 echo "Downloading Docker image from S3..."

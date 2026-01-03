@@ -1,4 +1,4 @@
-memo.txt
+memo*.txt
 tfplan 
 ### プロジェクト固有 ###
 .env

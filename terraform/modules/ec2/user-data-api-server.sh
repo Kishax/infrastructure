@@ -67,13 +67,85 @@ sudo cp -r api-repo/* /opt/api/
 rm -rf api-repo
 sudo chown -R ec2-user:ec2-user /opt/api
 
-# Download .env file from S3
-echo "Downloading .env file from S3..."
-aws s3 cp s3://kishax-production-env-files/i-b/api/.env /opt/api/.env --region $REGION
+# Update SSM Parameter with Private IP for dynamic discovery by other instances
+echo "Updating SSM parameter with this instance's private IP..."
+aws ssm put-parameter \
+  --region $REGION \
+  --name "/kishax/production/dynamic/api_server_private_ip" \
+  --value "$PRIVATE_IP" \
+  --type String \
+  --overwrite
+
+echo "SSM parameter updated: /kishax/production/dynamic/api_server_private_ip = $PRIVATE_IP"
+
+# Generate .env file from SSM Parameter Store
+echo "Generating .env file from SSM Parameter Store..."
+
+# Function to get SSM parameter
+get_param() {
+  aws ssm get-parameter --region $REGION --name "$1" --query 'Parameter.Value' --output text 2>/dev/null || echo ""
+}
+
+# Function to get SSM parameter with decryption (for SecureString)
+get_secret_param() {
+  aws ssm get-parameter --region $REGION --name "$1" --with-decryption --query 'Parameter.Value' --output text 2>/dev/null || echo ""
+}
+
+# Generate .env file
+cat > /opt/api/.env <<EOF
+# ===================================
+# API Server Configuration (i-b, EC2)
+# ===================================
+
+# Database Configuration (RDS PostgreSQL)
+DATABASE_URL="jdbc:postgresql://$(get_param "/kishax/production/shared/postgres_host")/$(get_param "/kishax/production/shared/postgres_database")?user=$(get_param "/kishax/production/shared/postgres_user")&password=$(get_secret_param "/kishax/production/shared/postgres_password")"
+
+# AWS SQS Configuration
+AWS_REGION=$(get_param "/kishax/production/shared/aws_region")
+MC_WEB_SQS_ACCESS_KEY_ID="$(get_param "/kishax/production/shared/sqs_access_key_id")"
+MC_WEB_SQS_SECRET_ACCESS_KEY=$(get_secret_param "/kishax/production/shared/sqs_secret_access_key")
+TO_WEB_QUEUE_URL=$(get_param "/kishax/production/shared/to_web_queue_url")
+TO_MC_QUEUE_URL=$(get_param "/kishax/production/shared/to_mc_queue_url")
+TO_DISCORD_QUEUE_URL=$(get_param "/kishax/production/shared/to_discord_queue_url")
+
+# Redis Configuration for Discord Bot (Docker network内)
+REDIS_URL_DISCORD=$(get_param "/kishax/production/api/redis_url_discord")
+
+# Authentication API Configuration
+AUTH_API_ENABLED=$(get_param "/kishax/production/api/auth_api_enabled")
+AUTH_API_PORT=$(get_param "/kishax/production/api/auth_api_port")
+AUTH_API_KEY=$(get_secret_param "/kishax/production/shared/auth_api_key")
+
+# Discord Bot Configuration
+DISCORD_TOKEN=$(get_secret_param "/kishax/production/api/discord_token")
+DISCORD_CHANNEL_ID=$(get_param "/kishax/production/api/discord_channel_id")
+DISCORD_CHAT_CHANNEL_ID=$(get_param "/kishax/production/api/discord_chat_channel_id")
+DISCORD_ADMIN_CHANNEL_ID=$(get_param "/kishax/production/api/discord_admin_channel_id")
+DISCORD_RULE_CHANNEL_ID=$(get_param "/kishax/production/api/discord_rule_channel_id")
+DISCORD_RULE_MESSAGE_ID=$(get_param "/kishax/production/api/discord_rule_message_id")
+DISCORD_GUILD_ID=$(get_param "/kishax/production/api/discord_guild_id")
+DISCORD_PRESENCE_ACTIVITY=$(get_param "/kishax/production/api/discord_presence_activity")
+BE_DEFAULT_EMOJI_NAME=$(get_param "/kishax/production/api/be_default_emoji_name")
+
+# SQS Configuration for Discord
+AWS_SQS_MAX_MESSAGES=$(get_param "/kishax/production/api/aws_sqs_max_messages")
+AWS_SQS_WAIT_TIME_SECONDS=$(get_param "/kishax/production/api/aws_sqs_wait_time_seconds")
+SQS_WORKER_POLLING_INTERVAL=$(get_param "/kishax/production/api/sqs_worker_polling_interval")
+SQS_WORKER_MAX_MESSAGES=$(get_param "/kishax/production/api/sqs_worker_max_messages")
+SQS_WORKER_WAIT_TIME=$(get_param "/kishax/production/api/sqs_worker_wait_time")
+SQS_WORKER_VISIBILITY_TIMEOUT=$(get_param "/kishax/production/api/sqs_worker_visibility_timeout")
+
+# Application Configuration
+SHUTDOWN_GRACE_PERIOD=$(get_param "/kishax/production/api/shutdown_grace_period")
+
+# Logging Configuration
+LOG_LEVEL=$(get_param "/kishax/production/api/log_level")
+EOF
+
 sudo chmod 600 /opt/api/.env
 sudo chown ec2-user:ec2-user /opt/api/.env
 
-echo ".env file downloaded successfully"
+echo ".env file generated successfully from SSM Parameter Store"
 
 # Download Docker images from S3
 echo "Downloading Docker images from S3..."

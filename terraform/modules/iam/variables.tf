@@ -29,8 +29,3 @@ variable "s3_world_backups_bucket_arn" {
   description = "S3 bucket ARN for world backups"
   type        = string
 }
-
-variable "s3_env_files_bucket_arn" {
-  description = "S3 bucket ARN for environment files (.env)"
-  type        = string
-}

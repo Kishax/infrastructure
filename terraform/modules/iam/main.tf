@@ -99,9 +99,7 @@ resource "aws_iam_role_policy" "mc_server_s3" {
           var.s3_image_maps_bucket_arn,
           "${var.s3_image_maps_bucket_arn}/*",
           var.s3_world_backups_bucket_arn,
-          "${var.s3_world_backups_bucket_arn}/*",
-          var.s3_env_files_bucket_arn,
-          "${var.s3_env_files_bucket_arn}/*"
+          "${var.s3_world_backups_bucket_arn}/*"
         ]
       }
     ]
@@ -203,9 +201,7 @@ resource "aws_iam_role_policy" "api_server_s3" {
         ]
         Resource = [
           var.s3_docker_images_bucket_arn,
-          "${var.s3_docker_images_bucket_arn}/*",
-          var.s3_env_files_bucket_arn,
-          "${var.s3_env_files_bucket_arn}/*"
+          "${var.s3_docker_images_bucket_arn}/*"
         ]
       }
     ]
@@ -333,9 +329,7 @@ resource "aws_iam_role_policy" "web_server_s3" {
         ]
         Resource = [
           var.s3_docker_images_bucket_arn,
-          "${var.s3_docker_images_bucket_arn}/*",
-          var.s3_env_files_bucket_arn,
-          "${var.s3_env_files_bucket_arn}/*"
+          "${var.s3_docker_images_bucket_arn}/*"
         ]
       }
     ]

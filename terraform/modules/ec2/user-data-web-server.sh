@@ -23,35 +23,8 @@ echo "Instance ID: $INSTANCE_ID"
 echo "Public IP: $PUBLIC_IP"
 echo "Region: $REGION"
 
-# Update Route53 record for kishax.net
-echo "Updating Route53 record for ${web_domain_name}..."
-CHANGE_BATCH=$(cat <<EOF
-{
-  "Changes": [
-    {
-      "Action": "UPSERT",
-      "ResourceRecordSet": {
-        "Name": "${web_domain_name}",
-        "Type": "A",
-        "TTL": 60,
-        "ResourceRecords": [
-          {
-            "Value": "$PUBLIC_IP"
-          }
-        ]
-      }
-    }
-  ]
-}
-EOF
-)
-
-aws route53 change-resource-record-sets \
-    --hosted-zone-id ${route53_zone_id} \
-    --change-batch "$CHANGE_BATCH" \
-    --region $REGION
-
-echo "Route53 record updated successfully"
+# Note: Route53 record for ${web_domain_name} is managed by Terraform (CloudFront Alias)
+# EIP is assigned, and CloudFront A/AAAA records are automatically updated by Terraform
 
 # System update
 echo "Updating system packages..."
@@ -250,6 +223,7 @@ echo "========================================="
 echo "Web Server (i-c) Initialization Complete"
 echo "========================================="
 echo "Public IP: $PUBLIC_IP"
-echo "Route53: ${web_domain_name} -> $PUBLIC_IP"
+echo "EIP assigned (managed by Terraform)"
+echo "Route53: ${web_domain_name} -> CloudFront (managed by Terraform)"
 echo "Application deployed to: /opt/web"
 echo "Service status: $(systemctl is-active web.service)"

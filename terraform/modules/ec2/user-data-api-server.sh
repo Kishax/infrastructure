@@ -91,37 +91,28 @@ get_secret_param() {
   aws ssm get-parameter --region $REGION --name "$1" --with-decryption --query 'Parameter.Value' --output text 2>/dev/null || echo ""
 }
 
-PG_PASS_RAW=$(get_secret_param "/kishax/production/shared/postgres_password")
+# Fetch all SSM parameters as variables
+echo "Fetching SSM parameters..."
 
-# URL encode password (replace # with %23, $ with %24)
+# Shared parameters
+POSTGRES_HOST=$(get_param "/kishax/production/shared/postgres_host")
+POSTGRES_DATABASE=$(get_param "/kishax/production/shared/postgres_database")
+POSTGRES_USER=$(get_param "/kishax/production/shared/postgres_user")
+PG_PASS_RAW=$(get_secret_param "/kishax/production/shared/postgres_password")
 PG_PASS_ENCODED=$(echo "${PG_PASS_RAW}" | sed 's/#/%23/g; s/\$/%24/g')
 
-# Generate .env file
-cat > /opt/api/.env <<EOF
-# ===================================
-# API Server Configuration (i-b, EC2)
-# ===================================
-
-# Database Configuration (RDS PostgreSQL)
-DATABASE_URL="jdbc:postgresql://$(get_param "/kishax/production/shared/postgres_host")/$(get_param "/kishax/production/shared/postgres_database")?user=$(get_param "/kishax/production/shared/postgres_user")&password=${PG_PASS_ENCODED}"
-
-# AWS SQS Configuration
-AWS_REGION=$(get_param "/kishax/production/shared/aws_region")
-MC_WEB_SQS_ACCESS_KEY_ID="$(get_param "/kishax/production/shared/sqs_access_key_id")"
-MC_WEB_SQS_SECRET_ACCESS_KEY=$(get_secret_param "/kishax/production/shared/sqs_secret_access_key")
+AWS_REGION_PARAM=$(get_param "/kishax/production/shared/aws_region")
+SQS_ACCESS_KEY_ID=$(get_param "/kishax/production/shared/sqs_access_key_id")
+SQS_SECRET_ACCESS_KEY=$(get_secret_param "/kishax/production/shared/sqs_secret_access_key")
 TO_WEB_QUEUE_URL=$(get_param "/kishax/production/shared/to_web_queue_url")
 TO_MC_QUEUE_URL=$(get_param "/kishax/production/shared/to_mc_queue_url")
 TO_DISCORD_QUEUE_URL=$(get_param "/kishax/production/shared/to_discord_queue_url")
-
-# Redis Configuration for Discord Bot (Docker network内)
-REDIS_URL_DISCORD=$(get_param "/kishax/production/api/redis_url_discord")
-
-# Authentication API Configuration
-AUTH_API_ENABLED=$(get_param "/kishax/production/api/auth_api_enabled")
-AUTH_API_PORT=$(get_param "/kishax/production/api/auth_api_port")
 AUTH_API_KEY=$(get_secret_param "/kishax/production/shared/auth_api_key")
 
-# Discord Bot Configuration
+# API Server parameters
+REDIS_URL_DISCORD=$(get_param "/kishax/production/api/redis_url_discord")
+AUTH_API_ENABLED=$(get_param "/kishax/production/api/auth_api_enabled")
+AUTH_API_PORT=$(get_param "/kishax/production/api/auth_api_port")
 DISCORD_TOKEN=$(get_secret_param "/kishax/production/api/discord_token")
 DISCORD_CHANNEL_ID=$(get_param "/kishax/production/api/discord_channel_id")
 DISCORD_CHAT_CHANNEL_ID=$(get_param "/kishax/production/api/discord_chat_channel_id")
@@ -131,20 +122,66 @@ DISCORD_RULE_MESSAGE_ID=$(get_param "/kishax/production/api/discord_rule_message
 DISCORD_GUILD_ID=$(get_param "/kishax/production/api/discord_guild_id")
 DISCORD_PRESENCE_ACTIVITY=$(get_param "/kishax/production/api/discord_presence_activity")
 BE_DEFAULT_EMOJI_NAME=$(get_param "/kishax/production/api/be_default_emoji_name")
-
-# SQS Configuration for Discord
 AWS_SQS_MAX_MESSAGES=$(get_param "/kishax/production/api/aws_sqs_max_messages")
 AWS_SQS_WAIT_TIME_SECONDS=$(get_param "/kishax/production/api/aws_sqs_wait_time_seconds")
 SQS_WORKER_POLLING_INTERVAL=$(get_param "/kishax/production/api/sqs_worker_polling_interval")
 SQS_WORKER_MAX_MESSAGES=$(get_param "/kishax/production/api/sqs_worker_max_messages")
 SQS_WORKER_WAIT_TIME=$(get_param "/kishax/production/api/sqs_worker_wait_time")
 SQS_WORKER_VISIBILITY_TIMEOUT=$(get_param "/kishax/production/api/sqs_worker_visibility_timeout")
+SHUTDOWN_GRACE_PERIOD=$(get_param "/kishax/production/api/shutdown_grace_period")
+LOG_LEVEL=$(get_param "/kishax/production/api/log_level")
+
+echo "SSM parameters fetched successfully"
+
+# Generate .env file
+cat > /opt/api/.env <<EOF
+# ===================================
+# API Server Configuration (i-b, EC2)
+# ===================================
+
+# Database Configuration (RDS PostgreSQL)
+DATABASE_URL="jdbc:postgresql://${POSTGRES_HOST}/${POSTGRES_DATABASE}?user=${POSTGRES_USER}&password=${PG_PASS_ENCODED}"
+
+# AWS SQS Configuration
+AWS_REGION=${AWS_REGION_PARAM}
+MC_WEB_SQS_ACCESS_KEY_ID="${SQS_ACCESS_KEY_ID}"
+MC_WEB_SQS_SECRET_ACCESS_KEY=${SQS_SECRET_ACCESS_KEY}
+TO_WEB_QUEUE_URL=${TO_WEB_QUEUE_URL}
+TO_MC_QUEUE_URL=${TO_MC_QUEUE_URL}
+TO_DISCORD_QUEUE_URL=${TO_DISCORD_QUEUE_URL}
+
+# Redis Configuration for Discord Bot (Docker network内)
+REDIS_URL_DISCORD=${REDIS_URL_DISCORD}
+
+# Authentication API Configuration
+AUTH_API_ENABLED=${AUTH_API_ENABLED}
+AUTH_API_PORT=${AUTH_API_PORT}
+AUTH_API_KEY=${AUTH_API_KEY}
+
+# Discord Bot Configuration
+DISCORD_TOKEN=${DISCORD_TOKEN}
+DISCORD_CHANNEL_ID=${DISCORD_CHANNEL_ID}
+DISCORD_CHAT_CHANNEL_ID=${DISCORD_CHAT_CHANNEL_ID}
+DISCORD_ADMIN_CHANNEL_ID=${DISCORD_ADMIN_CHANNEL_ID}
+DISCORD_RULE_CHANNEL_ID=${DISCORD_RULE_CHANNEL_ID}
+DISCORD_RULE_MESSAGE_ID=${DISCORD_RULE_MESSAGE_ID}
+DISCORD_GUILD_ID=${DISCORD_GUILD_ID}
+DISCORD_PRESENCE_ACTIVITY=${DISCORD_PRESENCE_ACTIVITY}
+BE_DEFAULT_EMOJI_NAME=${BE_DEFAULT_EMOJI_NAME}
+
+# SQS Configuration for Discord
+AWS_SQS_MAX_MESSAGES=${AWS_SQS_MAX_MESSAGES}
+AWS_SQS_WAIT_TIME_SECONDS=${AWS_SQS_WAIT_TIME_SECONDS}
+SQS_WORKER_POLLING_INTERVAL=${SQS_WORKER_POLLING_INTERVAL}
+SQS_WORKER_MAX_MESSAGES=${SQS_WORKER_MAX_MESSAGES}
+SQS_WORKER_WAIT_TIME=${SQS_WORKER_WAIT_TIME}
+SQS_WORKER_VISIBILITY_TIMEOUT=${SQS_WORKER_VISIBILITY_TIMEOUT}
 
 # Application Configuration
-SHUTDOWN_GRACE_PERIOD=$(get_param "/kishax/production/api/shutdown_grace_period")
+SHUTDOWN_GRACE_PERIOD=${SHUTDOWN_GRACE_PERIOD}
 
 # Logging Configuration
-LOG_LEVEL=$(get_param "/kishax/production/api/log_level")
+LOG_LEVEL=${LOG_LEVEL}
 EOF
 
 sudo chmod 600 /opt/api/.env

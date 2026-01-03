@@ -27,22 +27,22 @@ output "api_server_private_ip" {
 
 output "web_server_instance_id" {
   description = "Web Server Instance ID"
-  value       = aws_spot_instance_request.web_server.spot_instance_id
+  value       = aws_instance.web_server.id
 }
 
 output "web_server_public_ip" {
   description = "Web Server Public IP"
-  value       = try(data.aws_instance.web_server.public_ip, "")
+  value       = aws_instance.web_server.public_ip
 }
 
 output "web_server_public_dns" {
   description = "Web Server Public DNS"
-  value       = try(data.aws_instance.web_server.public_dns, "")
+  value       = aws_instance.web_server.public_dns
 }
 
 output "web_server_private_ip" {
   description = "Web Server Private IP"
-  value       = try(data.aws_instance.web_server.private_ip, "")
+  value       = aws_instance.web_server.private_ip
 }
 
 output "jump_server_instance_id" {

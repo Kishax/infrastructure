@@ -120,19 +120,17 @@ resource "aws_instance" "api_server" {
 }
 
 # EC2 Instance: Web Server (i-c)
-# - Spot instance for cost optimization
+# - On-Demand instance for reliability
 # - t2.micro (smallest)
 # - 24/7 operation
-resource "aws_spot_instance_request" "web_server" {
+resource "aws_instance" "web_server" {
   ami           = data.aws_ami.amazon_linux_2.id
   instance_type = "t2.micro"
-  spot_type     = "persistent"
-  spot_price    = "0.007"  # 60% of On-Demand ($0.0116)
-  
+
   subnet_id                   = var.public_subnet_ids[1]
   vpc_security_group_ids      = [var.web_server_sg_id]
   associate_public_ip_address = true  # CloudFront origin
-  
+
   iam_instance_profile = var.web_server_instance_profile
   key_name            = var.ec2_key_pair_name
 
@@ -150,7 +148,7 @@ resource "aws_spot_instance_request" "web_server" {
   }
 
   tags = {
-    Name     = "kishax-${var.environment}-web-server-spot-request"
+    Name     = "kishax-${var.environment}-web-server"
     Instance = "i-c"
     Role     = "Web-Discord-Bot"
     Schedule = "24/7"
@@ -159,31 +157,6 @@ resource "aws_spot_instance_request" "web_server" {
   lifecycle {
     ignore_changes = [ami]
   }
-}
-
-# Add tags to the actual Web server instance
-resource "aws_ec2_tag" "web_server_name" {
-  resource_id = data.aws_instance.web_server.id
-  key         = "Name"
-  value       = "kishax-${var.environment}-web-server"
-}
-
-resource "aws_ec2_tag" "web_server_instance" {
-  resource_id = data.aws_instance.web_server.id
-  key         = "Instance"
-  value       = "i-c"
-}
-
-resource "aws_ec2_tag" "web_server_role" {
-  resource_id = data.aws_instance.web_server.id
-  key         = "Role"
-  value       = "Web-Discord-Bot"
-}
-
-resource "aws_ec2_tag" "web_server_schedule" {
-  resource_id = data.aws_instance.web_server.id
-  key         = "Schedule"
-  value       = "24/7"
 }
 
 # EC2 Instance: Jump Server (i-d)
@@ -225,13 +198,6 @@ resource "aws_instance" "jump_server" {
 
   # Start in stopped state by default
   # User can start manually when needed
-}
-
-# Output for web server spot instance ID (need to extract from spot request)
-data "aws_instance" "web_server" {
-  instance_id = aws_spot_instance_request.web_server.spot_instance_id
-
-  depends_on = [aws_spot_instance_request.web_server]
 }
 
 # Elastic IP for Terraria Server (i-e)

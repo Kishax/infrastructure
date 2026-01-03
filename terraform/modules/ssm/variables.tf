@@ -359,7 +359,7 @@ variable "api_discord_guild_id" {
 variable "api_discord_presence_activity" {
   description = "Discord presence activity"
   type        = string
-  default     = "↑mc.kishax.net↑"
+  default     = "mc.kishax.net"
 }
 
 variable "api_be_default_emoji_name" {
@@ -494,4 +494,10 @@ variable "terraria_rest_api_usergroup" {
   description = "Terraria REST API user group"
   type        = string
   default     = "superadmin"
+}
+
+variable "terraria_discord_presence_activity" {
+  description = "Terraria Discord presence activity"
+  type        = string
+  default     = "tera.kishax.net"
 }

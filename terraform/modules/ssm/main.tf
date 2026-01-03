@@ -626,3 +626,10 @@ resource "aws_ssm_parameter" "terraria_rest_api_usergroup" {
   value = var.terraria_rest_api_usergroup
   tags  = var.tags
 }
+
+resource "aws_ssm_parameter" "terraria_discord_presence_activity" {
+  name  = "/kishax/${var.environment}/terraria/discord_presence_activity"
+  type  = "String"
+  value = var.terraria_discord_presence_activity
+  tags  = var.tags
+}

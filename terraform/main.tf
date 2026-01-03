@@ -179,7 +179,7 @@ module "ssm" {
   api_discord_rule_channel_id        = var.api_discord_rule_channel_id
   api_discord_rule_message_id        = var.api_discord_rule_message_id
   api_discord_guild_id               = var.api_discord_guild_id
-  api_discord_presence_activity      = "↑mc.kishax.net↑"
+  api_discord_presence_activity      = "mc.kishax.net"
   api_be_default_emoji_name          = "steve"
   api_aws_sqs_max_messages           = "10"
   api_aws_sqs_wait_time_seconds      = "20"

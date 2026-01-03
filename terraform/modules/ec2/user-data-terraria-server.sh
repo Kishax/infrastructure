@@ -99,6 +99,7 @@ SERVER_NAME=$(get_param "/kishax/production/terraria/server_name")
 # Discord Bot Configuration (TerrariaChatRelay)
 DISCORD_BOT_TOKEN=$(get_secret_param "/kishax/production/terraria/discord_bot_token")
 DISCORD_CHANNEL_ID=$(get_param "/kishax/production/terraria/discord_channel_id")
+DISCORD_PRESENCE_ACTIVITY=$(get_param "/kishax/production/terraria/discord_presence_activity")
 
 # TShock REST API Configuration
 REST_API_ENABLED=$(get_param "/kishax/production/terraria/rest_api_enabled")

@@ -16,6 +16,8 @@ data "aws_ami" "amazon_linux_2" {
   }
 }
 
+# --- Elastic IPs ---
+
 # Elastic IP for MC Server (i-a)
 resource "aws_eip" "mc_server" {
   domain = "vpc"
@@ -26,22 +28,50 @@ resource "aws_eip" "mc_server" {
   }
 }
 
+# Elastic IP for API Server (i-b)
+resource "aws_eip" "api_server" {
+  domain = "vpc"
+
+  tags = {
+    Name     = "kishax-${var.environment}-api-server-eip"
+    Instance = "i-b"
+  }
+}
+
+# Elastic IP for Web Server (i-c)
+resource "aws_eip" "web_server" {
+  domain = "vpc"
+
+  tags = {
+    Name     = "kishax-${var.environment}-web-server-eip"
+    Instance = "i-c"
+  }
+}
+
+# Elastic IP for Terraria Server (i-e)
+resource "aws_eip" "terraria_server" {
+  domain = "vpc"
+
+  tags = {
+    Name     = "kishax-${var.environment}-terraria-server-eip"
+    Instance = "i-e"
+  }
+}
+
+# --- EC2 Instances ---
+
 # EC2 Instance: MC Server (i-a)
-# - On-Demand instance (data protection priority)
-# - t3.large for performance
-# - 5 hours/day operation (22:00-27:00)
 resource "aws_instance" "mc_server" {
   ami           = data.aws_ami.amazon_linux_2.id
   instance_type = "t3.large"
   
   subnet_id                   = var.public_subnet_ids[0]
   vpc_security_group_ids      = [var.mc_server_sg_id]
-  associate_public_ip_address = true
+  # associate_public_ip_address = true # EIPを使用するため削除
   
   iam_instance_profile = var.mc_server_instance_profile
-  key_name            = var.ec2_key_pair_name
+  key_name             = var.ec2_key_pair_name
 
-  # User Data for Route53 update and Docker setup
   user_data = templatefile("${path.module}/user-data-mc-server.sh", {
     route53_zone_id = var.route53_zone_id
     mc_domain_name  = var.mc_domain_name
@@ -49,17 +79,16 @@ resource "aws_instance" "mc_server" {
 
   root_block_device {
     volume_type           = "gp3"
-    volume_size           = 50  # GB
-    delete_on_termination = false  # データ保護
+    volume_size           = 50
+    delete_on_termination = false
     encrypted             = true
   }
 
-  # Additional EBS volume for Minecraft data
   ebs_block_device {
     device_name           = "/dev/sdf"
     volume_type           = "gp3"
-    volume_size           = 100  # GB
-    delete_on_termination = false  # データ保護
+    volume_size           = 100
+    delete_on_termination = false
     encrypted             = true
   }
 
@@ -71,45 +100,33 @@ resource "aws_instance" "mc_server" {
   }
 
   lifecycle {
-    ignore_changes = [ami]  # AMI更新時の再作成を防ぐ
+    ignore_changes = [ami]
   }
 }
 
-# Attach Elastic IP to MC Server
-resource "aws_eip_association" "mc_server" {
-  instance_id   = aws_instance.mc_server.id
-  allocation_id = aws_eip.mc_server.id
-}
-
 # EC2 Instance: API Server (i-b)
-# - Spot instance for cost optimization
-# - t3.small
-# - 24/7 operation
-# - Public subnet for internet access (Docker Hub, Discord API)
-resource "aws_spot_instance_request" "api_server" {
+resource "aws_instance" "api_server" {
   ami           = data.aws_ami.amazon_linux_2.id
   instance_type = "t3.small"
-  spot_type     = "persistent"  # 中断時に再起動
-  
+
   subnet_id                   = var.public_subnet_ids[0]
   vpc_security_group_ids      = [var.api_server_sg_id]
-  associate_public_ip_address = true  # Public subnet for internet access
-  
+  # associate_public_ip_address = true # EIPを使用するため削除
+
   iam_instance_profile = var.api_server_instance_profile
   key_name            = var.ec2_key_pair_name
 
-  # User Data for Docker and Redis setup
   user_data = file("${path.module}/user-data-api-server.sh")
 
   root_block_device {
     volume_type           = "gp3"
-    volume_size           = 30  # GB
+    volume_size           = 30
     delete_on_termination = true
     encrypted             = true
   }
 
   tags = {
-    Name     = "kishax-${var.environment}-api-server-spot-request"
+    Name     = "kishax-${var.environment}-api-server"
     Instance = "i-b"
     Role     = "API-Server-Redis"
     Schedule = "24/7"
@@ -120,59 +137,32 @@ resource "aws_spot_instance_request" "api_server" {
   }
 }
 
-# Add tags to the actual API server instance
-resource "aws_ec2_tag" "api_server_name" {
-  resource_id = data.aws_instance.api_server.id
-  key         = "Name"
-  value       = "kishax-${var.environment}-api-server"
-}
-
-resource "aws_ec2_tag" "api_server_instance" {
-  resource_id = data.aws_instance.api_server.id
-  key         = "Instance"
-  value       = "i-b"
-}
-
-resource "aws_ec2_tag" "api_server_role" {
-  resource_id = data.aws_instance.api_server.id
-  key         = "Role"
-  value       = "API-Server-Redis"
-}
-
-resource "aws_ec2_tag" "api_server_schedule" {
-  resource_id = data.aws_instance.api_server.id
-  key         = "Schedule"
-  value       = "24/7"
-}
-
 # EC2 Instance: Web Server (i-c)
-# - Spot instance for cost optimization
-# - t2.micro (smallest)
-# - 24/7 operation
-resource "aws_spot_instance_request" "web_server" {
+resource "aws_instance" "web_server" {
   ami           = data.aws_ami.amazon_linux_2.id
   instance_type = "t2.micro"
-  spot_type     = "persistent"
-  
+
   subnet_id                   = var.public_subnet_ids[1]
   vpc_security_group_ids      = [var.web_server_sg_id]
-  associate_public_ip_address = true  # CloudFront origin
-  
+  # associate_public_ip_address = true # EIPを使用するため削除
+
   iam_instance_profile = var.web_server_instance_profile
   key_name            = var.ec2_key_pair_name
 
-  # User Data for Docker setup
-  user_data = file("${path.module}/user-data-web-server.sh")
+  user_data = templatefile("${path.module}/user-data-web-server.sh", {
+    route53_zone_id  = var.route53_zone_id
+    web_domain_name  = var.web_domain_name
+  })
 
   root_block_device {
     volume_type           = "gp3"
-    volume_size           = 20  # GB
+    volume_size           = 20
     delete_on_termination = true
     encrypted             = true
   }
 
   tags = {
-    Name     = "kishax-${var.environment}-web-server-spot-request"
+    Name     = "kishax-${var.environment}-web-server"
     Instance = "i-c"
     Role     = "Web-Discord-Bot"
     Schedule = "24/7"
@@ -183,53 +173,23 @@ resource "aws_spot_instance_request" "web_server" {
   }
 }
 
-# Add tags to the actual Web server instance
-resource "aws_ec2_tag" "web_server_name" {
-  resource_id = data.aws_instance.web_server.id
-  key         = "Name"
-  value       = "kishax-${var.environment}-web-server"
-}
-
-resource "aws_ec2_tag" "web_server_instance" {
-  resource_id = data.aws_instance.web_server.id
-  key         = "Instance"
-  value       = "i-c"
-}
-
-resource "aws_ec2_tag" "web_server_role" {
-  resource_id = data.aws_instance.web_server.id
-  key         = "Role"
-  value       = "Web-Discord-Bot"
-}
-
-resource "aws_ec2_tag" "web_server_schedule" {
-  resource_id = data.aws_instance.web_server.id
-  key         = "Schedule"
-  value       = "24/7"
-}
-
 # EC2 Instance: Jump Server (i-d)
-# - On-Demand (rarely used, cost minimal)
-# - t2.micro (smallest)
-# - On-demand only (manual start/stop)
-# - Public subnet for SSM Agent connectivity (no NAT Gateway cost)
 resource "aws_instance" "jump_server" {
   ami           = data.aws_ami.amazon_linux_2.id
   instance_type = "t2.micro"
   
   subnet_id                   = var.public_subnet_ids[0]
   vpc_security_group_ids      = [var.jump_server_sg_id]
-  associate_public_ip_address = true  # Public subnet for SSM connectivity
+  associate_public_ip_address = true  # 踏み台は一時的な利用のためEIP化せず維持
   
   iam_instance_profile = var.jump_server_instance_profile
   key_name            = var.ec2_key_pair_name
 
-  # User Data for PostgreSQL/MySQL client setup
   user_data = file("${path.module}/user-data-jump-server.sh")
 
   root_block_device {
     volume_type           = "gp3"
-    volume_size           = 10  # GB (minimal)
+    volume_size           = 10
     delete_on_termination = true
     encrypted             = true
   }
@@ -244,56 +204,26 @@ resource "aws_instance" "jump_server" {
   lifecycle {
     ignore_changes = [ami]
   }
-
-  # Start in stopped state by default
-  # User can start manually when needed
-}
-
-# Outputs for spot instance IDs (need to extract from spot request)
-data "aws_instance" "api_server" {
-  instance_id = aws_spot_instance_request.api_server.spot_instance_id
-
-  depends_on = [aws_spot_instance_request.api_server]
-}
-
-data "aws_instance" "web_server" {
-  instance_id = aws_spot_instance_request.web_server.spot_instance_id
-
-  depends_on = [aws_spot_instance_request.web_server]
-}
-
-# Elastic IP for Terraria Server (i-e)
-resource "aws_eip" "terraria_server" {
-  domain = "vpc"
-
-  tags = {
-    Name     = "kishax-${var.environment}-terraria-server-eip"
-    Instance = "i-e"
-  }
 }
 
 # EC2 Instance: Terraria Server (i-e)
-# - On-Demand instance (manual start/stop)
-# - t3.small
-# - Manual operation (user starts/stops when needed)
 resource "aws_instance" "terraria_server" {
   ami           = data.aws_ami.amazon_linux_2.id
   instance_type = "t3.small"
 
   subnet_id                   = var.public_subnet_ids[0]
   vpc_security_group_ids      = [var.terraria_server_sg_id]
-  associate_public_ip_address = true
+  # associate_public_ip_address = true # EIPを使用するため削除
 
   iam_instance_profile = var.terraria_server_instance_profile
   key_name            = var.ec2_key_pair_name
 
-  # User Data for basic setup
   user_data = file("${path.module}/user-data-terraria-server.sh")
 
   root_block_device {
     volume_type           = "gp3"
-    volume_size           = 20  # GB
-    delete_on_termination = false  # データ保護
+    volume_size           = 20
+    delete_on_termination = false
     encrypted             = true
   }
 
@@ -309,7 +239,23 @@ resource "aws_instance" "terraria_server" {
   }
 }
 
-# Attach Elastic IP to Terraria Server
+# --- EIP Associations ---
+
+resource "aws_eip_association" "mc_server" {
+  instance_id   = aws_instance.mc_server.id
+  allocation_id = aws_eip.mc_server.id
+}
+
+resource "aws_eip_association" "api_server" {
+  instance_id   = aws_instance.api_server.id
+  allocation_id = aws_eip.api_server.id
+}
+
+resource "aws_eip_association" "web_server" {
+  instance_id   = aws_instance.web_server.id
+  allocation_id = aws_eip.web_server.id
+}
+
 resource "aws_eip_association" "terraria_server" {
   instance_id   = aws_instance.terraria_server.id
   allocation_id = aws_eip.terraria_server.id

@@ -187,3 +187,25 @@ output "s3_terraria_backups_bucket_arn" {
   description = "S3 bucket ARN for terraria backups"
   value       = module.s3.terraria_backups_bucket_arn
 }
+
+# Lambda Outputs
+output "ec2_scheduler_function_name" {
+  description = "EC2 Scheduler Lambda function name"
+  value       = module.lambda.ec2_scheduler_function_name
+}
+
+output "ec2_scheduler_function_arn" {
+  description = "EC2 Scheduler Lambda function ARN"
+  value       = module.lambda.ec2_scheduler_function_arn
+}
+
+# EventBridge Outputs
+output "start_schedule_arn" {
+  description = "EventBridge start schedule ARN"
+  value       = module.eventbridge.start_schedule_arn
+}
+
+output "stop_schedule_arn" {
+  description = "EventBridge stop schedule ARN"
+  value       = module.eventbridge.stop_schedule_arn
+}

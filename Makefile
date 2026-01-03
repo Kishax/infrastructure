@@ -295,106 +295,19 @@ ec2-stop-terra: ## i-e (Terraria Server)を停止
 	aws ec2 stop-instances --instance-ids $$INSTANCE_ID --profile $(AWS_PROFILE)
 
 ## =============================================================================
-## SSM接続（ポートフォワーディング - このターミナルを占有）
+## SSM接続（直接SSMセッション接続）
 ## =============================================================================
 
-.PHONY: ssm-mc ssm-api ssm-web ssm-jump ssm-terra ssm-mysql ssm-postgres ssm-start-all ssm-stop-all ssm-status ssm-start-all-tmux ssm-stop-all-tmux ssm-check
+.PHONY: ssm-mc ssm-api ssm-web ssm-jump ssm-terra ssm-mysql ssm-postgres
 
-ssm-mc: ## i-a (MC Server) へポートフォワーディング (localhost:2222)
-	@echo "🔗 MC Server (i-a) へポートフォワーディングを開始します..."
-	@if [ ! -f .env.auto ]; then \
-		echo "❌ .env.autoが見つかりません。'make env-load'を実行してください"; \
-		exit 1; \
-	fi; \
-	source .env.auto; \
-	PRIVATE_IP_A="$$INSTANCE_ID_A_PRIVATE_IP"; \
-	INSTANCE_ID_D=$$(aws ec2 describe-instances --profile $(AWS_PROFILE) --region $(AWS_REGION) \
-		--filters "Name=tag:Name,Values=kishax-$(ENVIRONMENT)-jump-server" "Name=instance-state-name,Values=running" \
-		--query 'Reservations[0].Instances[0].InstanceId' --output text 2>/dev/null); \
-	if [ -z "$$INSTANCE_ID_D" ] || [ "$$INSTANCE_ID_D" = "None" ]; then \
-		echo "❌ Jump Serverが起動していません"; \
-		exit 1; \
-	fi; \
-	if [ -z "$$PRIVATE_IP_A" ] || [ "$$PRIVATE_IP_A" = "None" ]; then \
-		echo "❌ MC Serverのプライベート IPが見つかりません (.env.auto)"; \
-		exit 1; \
-	fi; \
-	echo "Jump Server: $$INSTANCE_ID_D"; \
-	echo "Target: $$PRIVATE_IP_A (MC Server)"; \
-	echo "Local Port: 2222"; \
-	echo ""; \
-	echo "✅ ポートフォワーディング開始 (このターミナルは占有されます)"; \
-	echo "📝 別ターミナルで 'make ssh-mc' を実行してSSH接続してください"; \
-	echo ""; \
-	aws ssm start-session \
-		--target $$INSTANCE_ID_D \
-		--document-name AWS-StartPortForwardingSessionToRemoteHost \
-		--parameters "{\"host\":[\"$$PRIVATE_IP_A\"],\"portNumber\":[\"22\"],\"localPortNumber\":[\"2222\"]}" \
-		--profile $(AWS_PROFILE)
+ssm-mc: ## i-a (MC Server) へSSM直接接続
+	@bash -c 'source .env && source .env.auto && aws ssm start-session --target $$INSTANCE_ID_A'
 
-ssm-api: ## i-b (API Server) へポートフォワーディング (localhost:2223)
-	@echo "🔗 API Server (i-b) へポートフォワーディングを開始します..."
-	@if [ ! -f .env.auto ]; then \
-		echo "❌ .env.autoが見つかりません。'make env-load'を実行してください"; \
-		exit 1; \
-	fi; \
-	source .env.auto; \
-	PRIVATE_IP_B="$$INSTANCE_ID_B_PRIVATE_IP"; \
-	INSTANCE_ID_D=$$(aws ec2 describe-instances --profile $(AWS_PROFILE) --region $(AWS_REGION) \
-		--filters "Name=tag:Name,Values=kishax-$(ENVIRONMENT)-jump-server" "Name=instance-state-name,Values=running" \
-		--query 'Reservations[0].Instances[0].InstanceId' --output text 2>/dev/null); \
-	if [ -z "$$INSTANCE_ID_D" ] || [ "$$INSTANCE_ID_D" = "None" ]; then \
-		echo "❌ Jump Serverが起動していません"; \
-		exit 1; \
-	fi; \
-	if [ -z "$$PRIVATE_IP_B" ] || [ "$$PRIVATE_IP_B" = "None" ]; then \
-		echo "❌ API Serverのプライベート IPが見つかりません (.env.auto)"; \
-		exit 1; \
-	fi; \
-	echo "Jump Server: $$INSTANCE_ID_D"; \
-	echo "Target: $$PRIVATE_IP_B (API Server)"; \
-	echo "Local Port: 2223"; \
-	echo ""; \
-	echo "✅ ポートフォワーディング開始 (このターミナルは占有されます)"; \
-	echo "📝 別ターミナルで 'make ssh-api' を実行してSSH接続してください"; \
-	echo ""; \
-	aws ssm start-session \
-		--target $$INSTANCE_ID_D \
-		--document-name AWS-StartPortForwardingSessionToRemoteHost \
-		--parameters "{\"host\":[\"$$PRIVATE_IP_B\"],\"portNumber\":[\"22\"],\"localPortNumber\":[\"2223\"]}" \
-		--profile $(AWS_PROFILE)
+ssm-api: ## i-b (API Server) へSSM直接接続
+	@bash -c 'source .env && source .env.auto && aws ssm start-session --target $$INSTANCE_ID_B'
 
-ssm-web: ## i-c (Web Server) へポートフォワーディング (localhost:2224)
-	@echo "🔗 Web Server (i-c) へポートフォワーディングを開始します..."
-	@if [ ! -f .env.auto ]; then \
-		echo "❌ .env.autoが見つかりません。'make env-load'を実行してください"; \
-		exit 1; \
-	fi; \
-	source .env.auto; \
-	PRIVATE_IP_C="$$INSTANCE_ID_C_PRIVATE_IP"; \
-	INSTANCE_ID_D=$$(aws ec2 describe-instances --profile $(AWS_PROFILE) --region $(AWS_REGION) \
-		--filters "Name=tag:Name,Values=kishax-$(ENVIRONMENT)-jump-server" "Name=instance-state-name,Values=running" \
-		--query 'Reservations[0].Instances[0].InstanceId' --output text 2>/dev/null); \
-	if [ -z "$$INSTANCE_ID_D" ] || [ "$$INSTANCE_ID_D" = "None" ]; then \
-		echo "❌ Jump Serverが起動していません"; \
-		exit 1; \
-	fi; \
-	if [ -z "$$PRIVATE_IP_C" ] || [ "$$PRIVATE_IP_C" = "None" ]; then \
-		echo "❌ Web Serverのプライベート IPが見つかりません (.env.auto)"; \
-		exit 1; \
-	fi; \
-	echo "Jump Server: $$INSTANCE_ID_D"; \
-	echo "Target: $$PRIVATE_IP_C (Web Server)"; \
-	echo "Local Port: 2224"; \
-	echo ""; \
-	echo "✅ ポートフォワーディング開始 (このターミナルは占有されます)"; \
-	echo "📝 別ターミナルで 'make ssh-web' を実行してSSH接続してください"; \
-	echo ""; \
-	aws ssm start-session \
-		--target $$INSTANCE_ID_D \
-		--document-name AWS-StartPortForwardingSessionToRemoteHost \
-		--parameters "{\"host\":[\"$$PRIVATE_IP_C\"],\"portNumber\":[\"22\"],\"localPortNumber\":[\"2224\"]}" \
-		--profile $(AWS_PROFILE)
+ssm-web: ## i-c (Web Server) へSSM直接接続
+	@bash -c 'source .env && source .env.auto && aws ssm start-session --target $$INSTANCE_ID_C'
 
 ssm-jump: ## i-d (Jump Server) へSSM直接接続
 	@echo "🔗 Jump Server (i-d) へSSMセッションを開始します..."
@@ -409,37 +322,8 @@ ssm-jump: ## i-d (Jump Server) へSSM直接接続
 	echo ""; \
 	aws ssm start-session --target $$INSTANCE_ID --profile $(AWS_PROFILE)
 
-ssm-terra: ## i-e (Terraria Server) へポートフォワーディング (localhost:2225)
-	@echo "🔗 Terraria Server (i-e) へポートフォワーディングを開始します..."
-	@if [ ! -f .env.auto ]; then \
-		echo "❌ .env.autoが見つかりません。'make env-load'を実行してください"; \
-		exit 1; \
-	fi; \
-	source .env.auto; \
-	PRIVATE_IP_E="$$INSTANCE_ID_E_PRIVATE_IP"; \
-	INSTANCE_ID_D=$$(aws ec2 describe-instances --profile $(AWS_PROFILE) --region $(AWS_REGION) \
-		--filters "Name=tag:Name,Values=kishax-$(ENVIRONMENT)-jump-server" "Name=instance-state-name,Values=running" \
-		--query 'Reservations[0].Instances[0].InstanceId' --output text 2>/dev/null); \
-	if [ -z "$$INSTANCE_ID_D" ] || [ "$$INSTANCE_ID_D" = "None" ]; then \
-		echo "❌ Jump Serverが起動していません"; \
-		exit 1; \
-	fi; \
-	if [ -z "$$PRIVATE_IP_E" ] || [ "$$PRIVATE_IP_E" = "None" ]; then \
-		echo "❌ Terraria Serverのプライベート IPが見つかりません (.env.auto)"; \
-		exit 1; \
-	fi; \
-	echo "Jump Server: $$INSTANCE_ID_D"; \
-	echo "Target: $$PRIVATE_IP_E (Terraria Server)"; \
-	echo "Local Port: 2225"; \
-	echo ""; \
-	echo "✅ ポートフォワーディング開始 (このターミナルは占有されます)"; \
-	echo "📝 別ターミナルで 'make ssh-terra' を実行してSSH接続してください"; \
-	echo ""; \
-	aws ssm start-session \
-		--target $$INSTANCE_ID_D \
-		--document-name AWS-StartPortForwardingSessionToRemoteHost \
-		--parameters "{\"host\":[\"$$PRIVATE_IP_E\"],\"portNumber\":[\"22\"],\"localPortNumber\":[\"2225\"]}" \
-		--profile $(AWS_PROFILE)
+ssm-terra: ## i-e (Terraria Server) へSSM直接接続
+	@bash -c 'source .env && source .env.auto && aws ssm start-session --target $$INSTANCE_ID_E'
 
 ssm-mysql: ## RDS MySQL へポートフォワーディング (localhost:3307)
 	@echo "🔗 RDS MySQL へポートフォワーディングを開始します..."
@@ -504,24 +388,6 @@ ssm-postgres: ## RDS PostgreSQL へポートフォワーディング (localhost:
 		--document-name AWS-StartPortForwardingSessionToRemoteHost \
 		--parameters "{\"host\":[\"$$RDS_POSTGRES_HOST\"],\"portNumber\":[\"$$RDS_POSTGRES_PORT\"],\"localPortNumber\":[\"5433\"]}" \
 		--profile $(AWS_PROFILE)
-
-ssm-start-all: ## 全てのポートフォワーディングを一括起動（バックグラウンド）
-	@bash scripts/start-all-port-forwarding.sh
-
-ssm-stop-all: ## 全てのポートフォワーディングを一括停止
-	@bash scripts/stop-all-port-forwarding.sh
-
-ssm-status: ## ポートフォワーディングの状態を確認
-	@bash scripts/status-port-forwarding.sh
-
-ssm-start-all-tmux: ## 全てのポートフォワーディングを一括起動（tmux版・推奨）
-	@bash scripts/start-all-port-forwarding-tmux.sh
-
-ssm-stop-all-tmux: ## 全てのポートフォワーディングを一括停止（tmux版）
-	@bash scripts/stop-all-port-forwarding-tmux.sh
-
-ssm-check: ## ポートとプロセスの詳細確認（デバッグ用）
-	@bash scripts/check-port-forwarding.sh
 
 ## =============================================================================
 ## SSH接続（純粋なSSH - 事前に ssm-* でポートフォワーディングが必要）

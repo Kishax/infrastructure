@@ -170,7 +170,8 @@ resource "aws_iam_role_policy" "api_server_ssm" {
         Action = [
           "ssm:GetParameter",
           "ssm:GetParameters",
-          "ssm:GetParametersByPath"
+          "ssm:GetParametersByPath",
+          "ssm:PutParameter"
         ]
         Resource = "arn:aws:ssm:*:*:parameter/kishax/*"
       }

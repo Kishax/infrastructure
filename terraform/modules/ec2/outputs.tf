@@ -17,12 +17,12 @@ output "mc_server_private_ip" {
 
 output "api_server_instance_id" {
   description = "API Server Instance ID"
-  value       = aws_spot_instance_request.api_server.spot_instance_id
+  value       = aws_instance.api_server.id
 }
 
 output "api_server_private_ip" {
   description = "API Server Private IP"
-  value       = try(data.aws_instance.api_server.private_ip, "")
+  value       = aws_instance.api_server.private_ip
 }
 
 output "web_server_instance_id" {

@@ -82,19 +82,18 @@ resource "aws_eip_association" "mc_server" {
 }
 
 # EC2 Instance: API Server (i-b)
-# - Spot instance for cost optimization
+# - On-Demand instance for reliability
 # - t3.small
 # - 24/7 operation
 # - Public subnet for internet access (Docker Hub, Discord API)
-resource "aws_spot_instance_request" "api_server" {
+resource "aws_instance" "api_server" {
   ami           = data.aws_ami.amazon_linux_2.id
   instance_type = "t3.small"
-  spot_type     = "persistent"  # 中断時に再起動
-  
+
   subnet_id                   = var.public_subnet_ids[0]
   vpc_security_group_ids      = [var.api_server_sg_id]
   associate_public_ip_address = true  # Public subnet for internet access
-  
+
   iam_instance_profile = var.api_server_instance_profile
   key_name            = var.ec2_key_pair_name
 
@@ -109,7 +108,7 @@ resource "aws_spot_instance_request" "api_server" {
   }
 
   tags = {
-    Name     = "kishax-${var.environment}-api-server-spot-request"
+    Name     = "kishax-${var.environment}-api-server"
     Instance = "i-b"
     Role     = "API-Server-Redis"
     Schedule = "24/7"
@@ -120,31 +119,6 @@ resource "aws_spot_instance_request" "api_server" {
   }
 }
 
-# Add tags to the actual API server instance
-resource "aws_ec2_tag" "api_server_name" {
-  resource_id = data.aws_instance.api_server.id
-  key         = "Name"
-  value       = "kishax-${var.environment}-api-server"
-}
-
-resource "aws_ec2_tag" "api_server_instance" {
-  resource_id = data.aws_instance.api_server.id
-  key         = "Instance"
-  value       = "i-b"
-}
-
-resource "aws_ec2_tag" "api_server_role" {
-  resource_id = data.aws_instance.api_server.id
-  key         = "Role"
-  value       = "API-Server-Redis"
-}
-
-resource "aws_ec2_tag" "api_server_schedule" {
-  resource_id = data.aws_instance.api_server.id
-  key         = "Schedule"
-  value       = "24/7"
-}
-
 # EC2 Instance: Web Server (i-c)
 # - Spot instance for cost optimization
 # - t2.micro (smallest)
@@ -153,6 +127,7 @@ resource "aws_spot_instance_request" "web_server" {
   ami           = data.aws_ami.amazon_linux_2.id
   instance_type = "t2.micro"
   spot_type     = "persistent"
+  spot_price    = "0.007"  # 60% of On-Demand ($0.0116)
   
   subnet_id                   = var.public_subnet_ids[1]
   vpc_security_group_ids      = [var.web_server_sg_id]
@@ -252,13 +227,7 @@ resource "aws_instance" "jump_server" {
   # User can start manually when needed
 }
 
-# Outputs for spot instance IDs (need to extract from spot request)
-data "aws_instance" "api_server" {
-  instance_id = aws_spot_instance_request.api_server.spot_instance_id
-
-  depends_on = [aws_spot_instance_request.api_server]
-}
-
+# Output for web server spot instance ID (need to extract from spot request)
 data "aws_instance" "web_server" {
   instance_id = aws_spot_instance_request.web_server.spot_instance_id
 

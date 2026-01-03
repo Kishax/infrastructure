@@ -106,3 +106,11 @@ resource "aws_cloudwatch_log_group" "ec2_scheduler" {
     Environment = var.environment
   }
 }
+
+# Lambda Permission - Allow EventBridge Scheduler to invoke
+resource "aws_lambda_permission" "allow_eventbridge" {
+  statement_id  = "AllowExecutionFromEventBridge"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.ec2_scheduler.function_name
+  principal     = "scheduler.amazonaws.com"
+}

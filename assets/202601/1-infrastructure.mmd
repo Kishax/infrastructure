@@ -1,0 +1,192 @@
+graph TB
+    subgraph Internet["🌐 Internet"]
+        Users[Users/Players]
+        MCPlayers[Minecraft Players]
+        TerrariaPlayers[Terraria Players]
+    end
+
+    subgraph AWS["☁️ AWS Cloud - ap-northeast-1"]
+        subgraph Route53["Route53"]
+            R53MC[mc.kishax.net<br/>A Record]
+            R53Web[kishax.net<br/>Alias Record]
+            R53Terraria[terraria.kishax.net<br/>A Record]
+        end
+
+        subgraph CloudFront["CloudFront"]
+            CF[Distribution<br/>kishax.net<br/>Port 443→80<br/>ACM証明書]
+        end
+
+        subgraph VPC["VPC - 10.0.0.0/16"]
+            subgraph PublicSubnets["Public Subnets (2 AZs)"]
+                subgraph AZ1Public["AZ-1a Public<br/>subnet-066*****"]
+                    EIPA[Elastic IP<br/>MC Server]
+                    EIPB[Elastic IP<br/>API Server]
+                    EIPC[Elastic IP<br/>Web Server]
+                    EIPE[Elastic IP<br/>Terraria Server]
+
+                    EC2A[i-a: MC Server<br/>t3.large On-Demand<br/>Docker + Velocity + Spigot<br/>servers.json管理<br/>Schedule: 22:00-27:00 JST]
+                    EC2B[i-b: API + Redis<br/>t3.small On-Demand<br/>Redis#1:6379 MC用<br/>Redis#2:6380 Web用<br/>Schedule: 24/7]
+                    EC2C[i-c: Web Server<br/>t2.micro On-Demand<br/>Next.js 16<br/>Schedule: 24/7]
+                    EC2D[i-d: Jump Server<br/>t2.micro On-Demand<br/>DB Admin + SSH Tunnel<br/>手動起動/停止]
+                    EC2E[i-e: Terraria Server<br/>t3.small On-Demand<br/>TShock 5.3.0<br/>手動起動/停止]
+                end
+            end
+
+            subgraph PrivateSubnets["Private Subnets (2 AZs)"]
+                subgraph AZ1cPrivate["AZ-1c Private<br/>subnet-0a4*****"]
+                    RDSPostgres[(RDS PostgreSQL v16.6<br/>db.t4g.micro<br/>Web + API + Bot用)]
+                    RDSMySQL[(RDS MySQL v8.0.40<br/>db.t4g.micro<br/>MC Server用)]
+                end
+            end
+
+            IGW[Internet Gateway]
+            S3Endpoint[S3 VPC Gateway Endpoint<br/>FREE]
+        end
+
+        subgraph S3["Amazon S3"]
+            S3Docker[kishax-prod-docker-images<br/>Lifecycle: 30 days<br/>Versioning: Enabled]
+            S3TFState[kishax-terraform-state<br/>State + Lock]
+            S3WorldBackups[kishax-prod-world-backups<br/>deployment/ + workspace/<br/>MCワールドバックアップ]
+            S3ImageMaps[kishax-prod-image-maps<br/>MC画像マップ用]
+            S3TerrariaBackups[kishax-prod-terraria-backups<br/>Terrariaワールドバックアップ]
+        end
+
+        subgraph SQS["Amazon SQS"]
+            SQSDiscord[Discord Queue<br/>kishax-production-discord-queue]
+            SQSToMC[To MC Queue<br/>kishax-production-to-mc-queue]
+            SQSToWeb[To Web Queue<br/>kishax-production-to-web-queue]
+        end
+
+        subgraph IAM["IAM"]
+            IAMRoles[EC2 Instance Roles<br/>mc_server_role<br/>api_server_role<br/>web_server_role<br/>jump_server_role<br/>terraria_server_role]
+            IAMUser[SQS IAM User<br/>Access Keys in SSM]
+            IAMLambda[Lambda Execution Role<br/>EC2 Scheduler]
+        end
+
+        subgraph SSM["Systems Manager"]
+            SSMParams[Parameter Store<br/>/kishax/production/*<br/>SQS + DB + OAuth]
+        end
+
+        subgraph Lambda["AWS Lambda"]
+            LambdaScheduler[EC2 Scheduler<br/>Start/Stop MC Server]
+        end
+
+        subgraph EventBridge["Amazon EventBridge"]
+            EBStart[Start Schedule<br/>22:00 JST]
+            EBStop[Stop Schedule<br/>27:00 JST → 翌日3:00]
+        end
+    end
+
+    %% External connections
+    MCPlayers -->|TCP 25565<br/>25577| R53MC
+    Users -->|HTTPS 443| R53Web
+    TerrariaPlayers -->|TCP 7777| R53Terraria
+
+    %% Route53 connections
+    R53MC -->|A Record| EIPA
+    R53Web -->|Alias| CF
+    R53Terraria -->|A Record| EIPE
+
+    %% CloudFront connection
+    CF -->|HTTP 80<br/>Origin| EC2C
+
+    %% EIP associations
+    EIPA -.->|Associated| EC2A
+    EIPB -.->|Associated| EC2B
+    EIPC -.->|Associated| EC2C
+    EIPE -.->|Associated| EC2E
+
+    %% Internet Gateway connections
+    IGW -->|Public Access| EC2A
+    IGW -->|Public Access| EC2B
+    IGW -->|Public Access| EC2C
+    IGW -->|Public Access| EC2D
+    IGW -->|Public Access| EC2E
+
+    %% EC2 internal communications (HTTP)
+    EC2A <-->|HTTP API<br/>Auth + Messages| EC2B
+    EC2C <-->|HTTP API<br/>Internal API Key| EC2B
+    EC2A -->|Redis #1<br/>6379| EC2B
+    EC2C -->|Redis #2<br/>6380| EC2B
+
+    %% Database connections
+    EC2A -->|MySQL 3306<br/>Spigot + Velocity| RDSMySQL
+    EC2B -->|PostgreSQL 5432<br/>API Server| RDSPostgres
+    EC2C -->|PostgreSQL 5432<br/>Next.js App| RDSPostgres
+
+    %% SQS connections
+    EC2A <-->|SQS Messages<br/>IAM User Keys| SQSToMC
+    EC2A <-->|SQS Messages| SQSDiscord
+    EC2B <-->|Bridge Pattern| SQSDiscord
+    EC2B <-->|Bridge Pattern| SQSToWeb
+    EC2C <-->|SQS Messages| SQSDiscord
+    EC2C <-->|SQS Messages| SQSToWeb
+
+    %% S3 Connections
+    EC2A -.->|Docker Image<br/>Upload/Download| S3Docker
+    EC2B -.->|Docker Image<br/>Upload/Download| S3Docker
+    EC2C -.->|Docker Image<br/>Upload/Download| S3Docker
+    EC2E -.->|Docker Image<br/>Upload/Download| S3Docker
+    S3Endpoint -.->|Gateway| S3Docker
+    S3Endpoint -.->|Gateway| S3TFState
+
+    EC2A -.->|World Backup<br/>deployment/ + workspace/| S3WorldBackups
+    EC2A -.->|Image Maps| S3ImageMaps
+    EC2E -.->|World Backup| S3TerrariaBackups
+
+    %% Jump Server access
+    EC2D -.->|Port Forward<br/>PostgreSQL Admin| RDSPostgres
+    EC2D -.->|Port Forward<br/>MySQL Admin| RDSMySQL
+    EC2D -.->|SSH Tunnel<br/>to i-a/i-b/i-c/i-e| EC2A
+
+    %% IAM associations
+    IAMRoles -.->|Instance Profile| EC2A
+    IAMRoles -.->|Instance Profile| EC2B
+    IAMRoles -.->|Instance Profile| EC2C
+    IAMRoles -.->|Instance Profile| EC2D
+    IAMRoles -.->|Instance Profile| EC2E
+    IAMUser -.->|Access Keys| SQS
+    IAMLambda -.->|Execution Role| LambdaScheduler
+
+    %% SSM Parameter access
+    EC2A -.->|Read Parameters| SSMParams
+    EC2B -.->|Read Parameters| SSMParams
+    EC2C -.->|Read Parameters| SSMParams
+    EC2E -.->|Read Parameters| SSMParams
+
+    %% EventBridge & Lambda
+    EBStart -->|Trigger| LambdaScheduler
+    EBStop -->|Trigger| LambdaScheduler
+    LambdaScheduler -.->|Start/Stop| EC2A
+
+    %% Annotations
+    note1[💡 全インスタンスEIP化<br/>コスト削減＆固定IP管理]
+    note2[💡 i-b: Public Subnet配置<br/>Discord API + Docker Hubアクセス<br/>NAT Gateway不要]
+    note3[💡 S3 World Backups<br/>deployment/: 本番デプロイ用圧縮<br/>workspace/: 実験用非圧縮]
+    note4[💡 MC Server: servers.json<br/>動的メモリ配分<br/>テンプレートベース設定<br/>自動プラグインデプロイ]
+    note5[💡 Lambda + EventBridge<br/>MCサーバー自動起動/停止<br/>22:00 JST起動 → 翌3:00停止]
+
+    classDef internet fill:#e1f5ff,stroke:#0078d4,stroke-width:3px
+    classDef cloudfront fill:#ffeaa7,stroke:#fdcb6e,stroke-width:3px
+    classDef ec2 fill:#a8e6cf,stroke:#56ab2f,stroke-width:3px
+    classDef ec2deployed fill:#81c784,stroke:#2e7d32,stroke-width:4px
+    classDef rds fill:#ffcccc,stroke:#ff6b6b,stroke-width:3px
+    classDef sqs fill:#dfe6e9,stroke:#636e72,stroke-width:3px
+    classDef s3 fill:#ffd32a,stroke:#ff9f1a,stroke-width:3px
+    classDef route53 fill:#ffeaa7,stroke:#fdcb6e,stroke-width:3px
+    classDef iam fill:#c7ecee,stroke:#079992,stroke-width:3px
+    classDef lambda fill:#ff9999,stroke:#ff6666,stroke-width:3px
+    classDef eventbridge fill:#cc99ff,stroke:#9966ff,stroke-width:3px
+    classDef note fill:#fff3cd,stroke:#856404,stroke-width:2px,stroke-dasharray: 5 5
+
+    class Users,MCPlayers,TerrariaPlayers internet
+    class CF cloudfront
+    class EC2A,EC2B,EC2C,EC2D,EC2E ec2
+    class RDSPostgres,RDSMySQL rds
+    class SQSDiscord,SQSToMC,SQSToWeb sqs
+    class S3Docker,S3TFState,S3WorldBackups,S3ImageMaps,S3TerrariaBackups s3
+    class R53MC,R53Web,R53Terraria route53
+    class IAMRoles,IAMUser,SSMParams,IAMLambda iam
+    class LambdaScheduler lambda
+    class EBStart,EBStop eventbridge
+    class note1,note2,note3,note4,note5 note

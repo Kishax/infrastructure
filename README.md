@@ -4,14 +4,13 @@ KishaX の統合インフラストラクチャプロジェクト
 
 ## Architecture
 
-### 最新インフラ構成 (EC2ベース - 2025/12更新)
-![最新インフラ図](assets/202512/2-infrastructure.png)
+### 最新インフラ構成 (EC2ベース - 2026/01更新)
+![最新インフラ図](assets/202601/1-infrastructure.png)
 
-### 前世代インフラ構成 (EC2移行前)
-![旧インフラ図](assets/202512/1-infrastructure.png)
-
-### レガシー環境 (ECS/Fargate)
-![レガシーインフラ図](assets/202506/1-infrastructure.png)
+### 前世代インフラ構成
+- [2025/12 - EC2移行直後](assets/202512/2-infrastructure.png)
+- [2025/12 - EC2移行前](assets/202512/1-infrastructure.png)
+- [2025/06 - ECS/Fargate環境](assets/202506/1-infrastructure.png)
 
 ## 📋 Project Structure
 
@@ -56,19 +55,23 @@ kishax/
 
 ## 🏗️ Infrastructure Overview
 
-### EC2 Instances (4台構成)
+### EC2 Instances (5台構成)
 
-| Instance | Type | Role | Subnet | Cost Optimization |
-|----------|------|------|--------|-------------------|
-| **i-a** | t3.large On-Demand | MC Server | Public | 24/7運用 |
-| **i-b** | t3.small Spot | API + Redis | **Public** | NAT不要で¥5,000削減 |
-| **i-c** | t2.micro Spot | Web Server | Public | ✅ Deployed |
-| **i-d** | t2.micro On-Demand | Jump Server | Public | 必要時のみ起動 |
+| Instance | Type | Role | Subnet | Schedule | Elastic IP |
+|----------|------|------|--------|----------|------------|
+| **i-a** | t3.large On-Demand | MC Server | Public | 22:00-27:00 JST | ✅ |
+| **i-b** | t3.small On-Demand | API + Redis | Public | 22:00-27:00 JST | ✅ |
+| **i-c** | t2.micro On-Demand | Web Server | Public | 22:00-27:00 JST | ✅ |
+| **i-d** | t2.micro On-Demand | Jump Server | Public | 手動 | - |
+| **i-e** | t3.small On-Demand | Terraria Server | Public | 手動 | ✅ |
 
-**コスト最適化の判断**:
-- i-b を Public に配置することで **NAT Gateway (¥5,000/月)** を削減
-- Discord API, Docker Hub へのアクセスのためインターネット接続が必要
-- 目標月額: **¥5,000-6,000** 達成
+> **⚠️ 注意**: i-b（API）とi-c（Web）は、将来的には24/7稼働を予定していますが、現在はコスト最適化のため、i-a（MC）と同様に22:00-27:00 JSTのみ稼働しています。Lambda + EventBridgeで3インスタンス（i-a/i-b/i-c）を同時起動/停止。
+
+**主要な変更点**:
+- ✅ **全インスタンスEIP化**: 固定IPによる管理簡素化
+- ✅ **Terrariaサーバー追加**: i-e（t3.small）でTShock 5.3.0運用
+- ✅ **自動スケジューリング**: Lambda + EventBridgeでi-a/i-b/i-c を22:00 JST起動 → 翌3:00停止
+- ✅ **Spot→On-Demand移行**: 安定性向上のためi-b/i-cをOn-Demand化
 
 ### Databases (RDS)
 
@@ -82,8 +85,16 @@ kishax/
 | Service | Bucket/Table | Purpose |
 |---------|--------------|---------|
 | S3 | kishax-prod-docker-images | Docker Image保存 (30日ライフサイクル) |
+| S3 | kishax-prod-world-backups | MCワールドバックアップ (deployment/ + workspace/) |
+| S3 | kishax-prod-image-maps | MC画像マップ用 |
+| S3 | kishax-prod-terraria-backups | Terrariaワールドバックアップ |
 | S3 | kishax-terraform-state | Terraform状態管理 |
 | DynamoDB | kishax-terraform-locks | Terraform State Lock |
+
+**S3バックアップ戦略**:
+- `deployment/`: 本番デプロイ用（圧縮tar.gz、バージョン管理あり）
+- `workspace/`: 実験用作業スペース（非圧縮、差分同期、1世代のみ）
+- 詳細: [world-s3-architecture.md](docs/infrastructure/ec2/world-s3-architecture.md)
 
 ### Messaging & Queues
 
@@ -95,12 +106,17 @@ kishax/
 
 **SQS認証**: IAM Userのアクセスキー（SSM Parameter Storeに保管）
 
-### Content Delivery
+### Content Delivery & Automation
 
 - **CloudFront**: kishax.net (HTTPS)
   - Origin: i-c (Port 80)
   - ACM証明書: *.kishax.net
   - キャッシュ最適化
+
+- **Lambda + EventBridge**: EC2自動スケジューリング
+  - 22:00 JST: 3インスタンス自動起動（i-a/i-b/i-c）
+  - 翌日3:00 JST: 3インスタンス自動停止（i-a/i-b/i-c）
+  - コスト最適化: 稼働時間を5時間/日に制限
 
 ## 🎮 MC Server: servers.json管理システム
 
@@ -217,24 +233,31 @@ terraform apply
    ↓
 2. i-c (Web Server)         ← i-bのRedis/APIに依存 ✅
    ↓
-3. i-a (MC Server)          ← i-bのRedis/APIに依存
+3. i-a (MC Server)          ← i-bのRedis/APIに依存 ✅
+   ↓
+4. i-e (Terraria Server)    ← 独立（手動起動/停止） ✅
 ```
 
 詳細は [`docs/infrastructure/ec2/deployment.md`](docs/infrastructure/ec2/deployment.md) を参照。
 
 ## 📊 Cost Estimate
 
-| Resource | Spec | Monthly Cost (JPY) |
-|----------|------|--------------------|
-| i-a (MC) | t3.large On-Demand | ¥2,500 |
-| i-b (API) | t3.small Spot | ¥500 |
-| i-c (Web) | t2.micro Spot | ¥200 |
-| i-d (Jump) | t2.micro On-Demand | ¥300 (時間課金) |
-| RDS PostgreSQL | db.t4g.micro | ¥1,200 |
-| RDS MySQL | db.t4g.micro | ¥1,200 |
-| CloudFront | CDN + HTTPS | ¥300 |
-| S3 + その他 | Storage + Transfer | ¥300 |
-| **合計** | | **¥5,500-6,500/月** |
+| Resource | Spec | Monthly Cost (JPY) | Note |
+|----------|------|--------------------|------|
+| i-a (MC) | t3.large On-Demand | ¥500 | 5時間/日のみ稼働 |
+| i-b (API) | t3.small On-Demand | ¥200 | 5時間/日のみ稼働 |
+| i-c (Web) | t2.micro On-Demand | ¥100 | 5時間/日のみ稼働 |
+| i-d (Jump) | t2.micro On-Demand | ¥200 | 必要時のみ起動 |
+| i-e (Terraria) | t3.small On-Demand | ¥200 | 必要時のみ起動 |
+| RDS PostgreSQL | db.t4g.micro | ¥1,200 | 24/7稼働 |
+| RDS MySQL | db.t4g.micro | ¥1,200 | 24/7稼働 |
+| Elastic IP | 4個 (i-a/b/c/e) | ¥200 | 関連付け済み |
+| CloudFront | CDN + HTTPS | ¥300 | - |
+| S3 + その他 | Storage + Transfer | ¥500 | World Backups含む |
+| Lambda + EventBridge | EC2 Scheduler | ¥50 | 月180回実行 |
+| **合計** | | **¥4,650/月** | 目標達成 |
+
+> **⚠️ 注意**: 現在はコスト最適化のため、i-a/i-b/i-cを5時間/日運用していますが、将来的にi-b/i-cを24/7稼働に変更する場合、月額コストは約¥6,000-7,000に上昇します。
 
 ## 📚 Documentation
 
@@ -244,6 +267,16 @@ terraform apply
 - [Next Challenges](docs/infrastructure/ec2/next-challenge.md) - 今後の改善案
 
 ## 🔄 Recent Updates
+
+### 2026-01-04
+- ✅ **全インスタンスEIP化**: 固定IP管理による安定性向上
+- ✅ **Terrariaサーバー追加**: i-e（t3.small）でTShock 5.3.0運用開始
+- ✅ **自動スケジューリング拡張**: i-a/i-b/i-cを同時起動/停止（22:00-27:00 JST）
+- ✅ **コスト最適化**: 月額¥4,650達成（将来的に24/7化予定）
+- ✅ **S3ワールドバックアップシステム**: deployment/ + workspace/の2層構造実装
+- ✅ **Spot→On-Demand移行**: i-b/i-cの安定性向上
+- ✅ **SSM Session Manager移行**: SSH接続廃止、Terraform差分解消
+- ✅ **アーキテクチャ図更新**: 2026/01版作成
 
 ### 2025-12-14
 - ✅ i-c (Web Server) デプロイ完了
@@ -259,5 +292,5 @@ terraform apply
 
 ---
 
-**Maintained by**: Kishax Development Team  
-**Last Update**: 2025-12-14
+**Maintained by**: Kishax Development Team
+**Last Update**: 2026-01-04

@@ -67,11 +67,21 @@ terraform output
 
 | インスタンス | 役割 | タイプ | 状態 |
 |------------|------|--------|------|
-| **i-b** | API Server + Redis + Discord Bot | t3.small Spot | 24/7稼働 |
-| **i-c** | Web Server | t2.micro Spot | 24/7稼働 |
-| **i-a** | MC Server | t3.large On-Demand | 22:00-27:00 |
-| **i-d** | RDS Jump Server | t2.micro On-Demand | 停止中 |
+| **i-a** | MC Server | t3.large On-Demand | 22:00-27:00 JST |
+| **i-b** | API Server + Redis + Discord Bot | t3.small On-Demand | 22:00-27:00 JST |
+| **i-c** | Web Server | t2.micro On-Demand | 22:00-27:00 JST |
+| **i-d** | RDS Jump Server | t2.micro On-Demand | 手動起動/停止 |
 | **i-e** | Terraria Server | t3.small On-Demand | 手動起動/停止 |
+
+> **⚠️ 注意**: i-b（API）とi-c（Web）は、将来的には24/7稼働を予定していますが、現在はコスト最適化のため、i-a（MC）と同様に22:00-27:00 JSTのみ稼働しています。Lambda + EventBridgeによる自動スケジューリングで3インスタンス（i-a/i-b/i-c）を同時起動/停止しています。
+
+### EC2アクセス方法の変更
+
+**SSH接続からSSM Session Managerへの移行**:
+- **背景**: Terraform applyのたびにSSH Port 22のインバウンドルールが差分として検出され、管理が煩雑になっていた
+- **対応**: SSM Session Manager経由での接続に完全移行
+- **影響**: `make ssh-*` コマンドは廃止
+- **i-d（Jump Server）の役割**: RDS（PostgreSQL/MySQL）へのポートフォワーディング専用
 
 ---
 
@@ -79,25 +89,25 @@ terraform output
 
 ### 0. Terraform適用時の注意事項
 
-#### ⚠️ Spotインスタンス停止状態でのterraform plan実行
+#### ⚠️ インスタンス停止状態でのterraform plan実行
 
-**重要**: Spotインスタンス（i-b, i-c）が停止状態で `terraform plan` を実行すると、強制置換（destroy + recreate）が発生します。
+**重要**: i-a/i-b/i-cが停止状態で `terraform plan` を実行すると、強制置換（destroy + recreate）が発生する可能性があります。
 
 **原因**:
-- 停止中のSpotインスタンスは `associate_public_ip_address` 属性を正しく返さない
-- Terraformは現在値 `false` と期待値 `true` の差分を検出
+- 停止中のインスタンスは一部の属性を正しく返さない
+- Terraformは現在値と期待値の差分を検出
 - インスタンスとそのタグリソースの強制置換がトリガーされる
 
 **対処法**:
 ```bash
-# terraform plan/apply実行前に、Spotインスタンスを起動
+# terraform plan/apply実行前に、インスタンスを起動
 aws ec2 start-instances \
-  --instance-ids $INSTANCE_ID_B $INSTANCE_ID_C \
+  --instance-ids $INSTANCE_ID_A $INSTANCE_ID_B $INSTANCE_ID_C \
   --profile AdministratorAccess-126112056177
 
 # ステータスチェックがグリーンになるまで待つ（2-3分）
 aws ec2 describe-instance-status \
-  --instance-ids $INSTANCE_ID_B $INSTANCE_ID_C \
+  --instance-ids $INSTANCE_ID_A $INSTANCE_ID_B $INSTANCE_ID_C \
   --profile AdministratorAccess-126112056177 \
   --query 'InstanceStatuses[*].{ID:InstanceId,State:InstanceState.Name,Status:InstanceStatus.Status}' \
   --output table
@@ -108,126 +118,6 @@ terraform plan
 ```
 
 **Note**: Jump Server (i-d) も同様の問題が発生するため、必要に応じて起動してください。
-
-#### ⚠️ Spotインスタンス再作成時のエラー対処
-
-##### エラー1: 複数インスタンスのマッチ
-
-`terraform apply`でSpotインスタンス（i-b, i-c）を再作成する場合、以下のエラーが発生することがあります：
-
-```
-Error: multiple EC2 Instances matched; use additional constraints to reduce matches to a single EC2 Instance
-```
-
-**原因**: 古いSpotインスタンスの削除完了前に、新しいSpotインスタンスが作成されたため。
-
-**対処法**: 古いインスタンスを手動で強制終了してから、再度`terraform apply`を実行
-
-```bash
-# 1. 古いインスタンスIDを取得（該当するインスタンスタイプで検索）
-# i-b (API Server)の場合
-aws ec2 describe-instances \
-  --profile AdministratorAccess-126112056177 \
-  --filters "Name=instance-state-name,Values=running,shutting-down" "Name=instance-type,Values=t3.small" \
-  --query 'Reservations[*].Instances[*].{ID:InstanceId,State:State.Name,SpotRequest:SpotInstanceRequestId,Subnet:SubnetId}' \
-  --output table
-
-# i-c (Web Server)の場合
-aws ec2 describe-instances \
-  --profile AdministratorAccess-126112056177 \
-  --filters "Name=instance-state-name,Values=running,shutting-down" "Name=instance-type,Values=t2.micro" \
-  --query 'Reservations[*].Instances[*].{ID:InstanceId,State:State.Name,SpotRequest:SpotInstanceRequestId,Subnet:SubnetId}' \
-  --output table
-
-# 1-1. 古いインスタンスを判別（複数ある場合）
-# より詳細な情報で判断
-aws ec2 describe-instances \
-  --profile AdministratorAccess-126112056177 \
-  --filters "Name=instance-state-name,Values=running,shutting-down" "Name=instance-type,Values=t3.small" \
-  --query 'Reservations[*].Instances[*].{InstanceId:InstanceId,LaunchTime:LaunchTime,State:State.Name,SubnetId:SubnetId,SpotRequestId:SpotInstanceRequestId}' \
-  --output table
-
-# 判別方法:
-# - LaunchTime（起動時刻）: より過去の時刻 = 古いインスタンス、最近の時刻 = 新しいインスタンス
-#   例: 21:44:41 (古い) < 21:46:27 (新しい)
-#       ↑ 古い方を終了        ↑ これを残す
-#
-# - SubnetId: 同じSubnetなら両方とも新しいか古いかのどちらか
-#   今回のケースでは両方とも同じPublic Subnet (subnet-0669fb266ff0aab47)
-#   → LaunchTimeで判別する
-#
-# Subnet情報を確認（PublicかPrivateか）:
-aws ec2 describe-subnets \
-  --profile AdministratorAccess-126112056177 \
-  --query 'Subnets[*].{SubnetId:SubnetId,CIDR:CidrBlock,AZ:AvailabilityZone,Name:Tags[?Key==`Name`].Value|[0]}' \
-  --output table
-# → Nameに「public」または「private」が含まれているかで判断
-
-# 2. 古いインスタンス（古いSubnetにあるもの）を強制終了
-aws ec2 terminate-instances \
-  --instance-ids i-0c179bef38c95181c \
-  --profile AdministratorAccess-126112056177
-
-# 3. インスタンスの状態を確認（terminated になるまで待つ）
-aws ec2 describe-instances \
-  --instance-ids i-0c179bef38c95181c \
-  --profile AdministratorAccess-126112056177 \
-  --query 'Reservations[0].Instances[0].State.Name' \
-  --output text
-
-# 4. terminated になったら terraform apply を再実行
-cd /Users/tk/git/Kishax/infrastructure/terraform
-terraform apply
-```
-
-##### エラー2: Spot Request terminated
-
-`terraform apply`後に以下のエラーが発生することがあります：
-
-```
-Error: reading EC2 Spot Instance Request (sir-xxxxx): terminated
-```
-
-**原因**: 新しく作成されたSpot Request自体がterminatedになった（Spot容量不足など）。
-
-**対処法**: Spot Requestをキャンセルし、Terraformのstateから削除してから再度`terraform apply`を実行
-
-```bash
-# 1. Spot Requestの状態確認（エラーメッセージからRequest IDを確認）
-aws ec2 describe-spot-instance-requests \
-  --spot-instance-request-ids sir-mb9fbtpn \
-  --profile AdministratorAccess-126112056177 \
-  --output table
-
-# 2. Spot Requestをキャンセル
-aws ec2 cancel-spot-instance-requests \
-  --spot-instance-request-ids sir-mb9fbtpn \
-  --profile AdministratorAccess-126112056177
-
-# 3. 関連するインスタンスIDを取得（もしあれば）
-aws ec2 describe-spot-instance-requests \
-  --spot-instance-request-ids sir-mb9fbtpn \
-  --profile AdministratorAccess-126112056177 \
-  --query 'SpotInstanceRequests[0].InstanceId' \
-  --output text
-
-# 4. インスタンスがあれば終了（<instance-id>を実際のIDに置き換え）
-aws ec2 terminate-instances \
-  --instance-ids <instance-id> \
-  --profile AdministratorAccess-126112056177
-
-# 5. Terraformのstateから削除
-cd /Users/tk/git/Kishax/infrastructure/terraform
-# i-bの場合
-terraform state rm module.ec2.aws_spot_instance_request.api_server
-# i-cの場合
-terraform state rm module.ec2.aws_spot_instance_request.web_server
-
-# 6. 再度terraform apply
-terraform apply
-```
-
-**Note**: Spot容量不足が継続する場合は、一時的にOn-Demandインスタンスに変更することを検討してください。
 
 #### ⚠️ Jump Server (i-d) のSubnet変更
 

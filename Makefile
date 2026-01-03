@@ -302,18 +302,21 @@ ec2-stop-terra: ## i-e (Terraria Server)を停止
 
 ssm-mc: ## i-a (MC Server) へポートフォワーディング (localhost:2222)
 	@echo "🔗 MC Server (i-a) へポートフォワーディングを開始します..."
-	@INSTANCE_ID_D=$$(aws ec2 describe-instances --profile $(AWS_PROFILE) --region $(AWS_REGION) \
+	@if [ ! -f .env.auto ]; then \
+		echo "❌ .env.autoが見つかりません。'make env-load'を実行してください"; \
+		exit 1; \
+	fi; \
+	source .env.auto; \
+	PRIVATE_IP_A="$$INSTANCE_ID_A_PRIVATE_IP"; \
+	INSTANCE_ID_D=$$(aws ec2 describe-instances --profile $(AWS_PROFILE) --region $(AWS_REGION) \
 		--filters "Name=tag:Name,Values=kishax-$(ENVIRONMENT)-jump-server" "Name=instance-state-name,Values=running" \
 		--query 'Reservations[0].Instances[0].InstanceId' --output text 2>/dev/null); \
-	PRIVATE_IP_A=$$(aws ec2 describe-instances --profile $(AWS_PROFILE) --region $(AWS_REGION) \
-		--filters "Name=tag:Name,Values=kishax-$(ENVIRONMENT)-mc-server" \
-		--query 'Reservations[0].Instances[0].PrivateIpAddress' --output text 2>/dev/null); \
 	if [ -z "$$INSTANCE_ID_D" ] || [ "$$INSTANCE_ID_D" = "None" ]; then \
 		echo "❌ Jump Serverが起動していません"; \
 		exit 1; \
 	fi; \
 	if [ -z "$$PRIVATE_IP_A" ] || [ "$$PRIVATE_IP_A" = "None" ]; then \
-		echo "❌ MC Serverが見つかりません"; \
+		echo "❌ MC Serverのプライベート IPが見つかりません (.env.auto)"; \
 		exit 1; \
 	fi; \
 	echo "Jump Server: $$INSTANCE_ID_D"; \
@@ -331,18 +334,21 @@ ssm-mc: ## i-a (MC Server) へポートフォワーディング (localhost:2222)
 
 ssm-api: ## i-b (API Server) へポートフォワーディング (localhost:2223)
 	@echo "🔗 API Server (i-b) へポートフォワーディングを開始します..."
-	@INSTANCE_ID_D=$$(aws ec2 describe-instances --profile $(AWS_PROFILE) --region $(AWS_REGION) \
+	@if [ ! -f .env.auto ]; then \
+		echo "❌ .env.autoが見つかりません。'make env-load'を実行してください"; \
+		exit 1; \
+	fi; \
+	source .env.auto; \
+	PRIVATE_IP_B="$$INSTANCE_ID_B_PRIVATE_IP"; \
+	INSTANCE_ID_D=$$(aws ec2 describe-instances --profile $(AWS_PROFILE) --region $(AWS_REGION) \
 		--filters "Name=tag:Name,Values=kishax-$(ENVIRONMENT)-jump-server" "Name=instance-state-name,Values=running" \
 		--query 'Reservations[0].Instances[0].InstanceId' --output text 2>/dev/null); \
-	PRIVATE_IP_B=$$(aws ec2 describe-instances --profile $(AWS_PROFILE) --region $(AWS_REGION) \
-		--filters "Name=tag:Name,Values=kishax-$(ENVIRONMENT)-api-server" \
-		--query 'Reservations[0].Instances[0].PrivateIpAddress' --output text 2>/dev/null); \
 	if [ -z "$$INSTANCE_ID_D" ] || [ "$$INSTANCE_ID_D" = "None" ]; then \
 		echo "❌ Jump Serverが起動していません"; \
 		exit 1; \
 	fi; \
 	if [ -z "$$PRIVATE_IP_B" ] || [ "$$PRIVATE_IP_B" = "None" ]; then \
-		echo "❌ API Serverが見つかりません"; \
+		echo "❌ API Serverのプライベート IPが見つかりません (.env.auto)"; \
 		exit 1; \
 	fi; \
 	echo "Jump Server: $$INSTANCE_ID_D"; \
@@ -360,18 +366,21 @@ ssm-api: ## i-b (API Server) へポートフォワーディング (localhost:222
 
 ssm-web: ## i-c (Web Server) へポートフォワーディング (localhost:2224)
 	@echo "🔗 Web Server (i-c) へポートフォワーディングを開始します..."
-	@INSTANCE_ID_D=$$(aws ec2 describe-instances --profile $(AWS_PROFILE) --region $(AWS_REGION) \
+	@if [ ! -f .env.auto ]; then \
+		echo "❌ .env.autoが見つかりません。'make env-load'を実行してください"; \
+		exit 1; \
+	fi; \
+	source .env.auto; \
+	PRIVATE_IP_C="$$INSTANCE_ID_C_PRIVATE_IP"; \
+	INSTANCE_ID_D=$$(aws ec2 describe-instances --profile $(AWS_PROFILE) --region $(AWS_REGION) \
 		--filters "Name=tag:Name,Values=kishax-$(ENVIRONMENT)-jump-server" "Name=instance-state-name,Values=running" \
 		--query 'Reservations[0].Instances[0].InstanceId' --output text 2>/dev/null); \
-	PRIVATE_IP_C=$$(aws ec2 describe-instances --profile $(AWS_PROFILE) --region $(AWS_REGION) \
-		--filters "Name=tag:Name,Values=kishax-$(ENVIRONMENT)-web-server" \
-		--query 'Reservations[0].Instances[0].PrivateIpAddress' --output text 2>/dev/null); \
 	if [ -z "$$INSTANCE_ID_D" ] || [ "$$INSTANCE_ID_D" = "None" ]; then \
 		echo "❌ Jump Serverが起動していません"; \
 		exit 1; \
 	fi; \
 	if [ -z "$$PRIVATE_IP_C" ] || [ "$$PRIVATE_IP_C" = "None" ]; then \
-		echo "❌ Web Serverが見つかりません"; \
+		echo "❌ Web Serverのプライベート IPが見つかりません (.env.auto)"; \
 		exit 1; \
 	fi; \
 	echo "Jump Server: $$INSTANCE_ID_D"; \
@@ -402,18 +411,21 @@ ssm-jump: ## i-d (Jump Server) へSSM直接接続
 
 ssm-terra: ## i-e (Terraria Server) へポートフォワーディング (localhost:2225)
 	@echo "🔗 Terraria Server (i-e) へポートフォワーディングを開始します..."
-	@INSTANCE_ID_D=$$(aws ec2 describe-instances --profile $(AWS_PROFILE) --region $(AWS_REGION) \
+	@if [ ! -f .env.auto ]; then \
+		echo "❌ .env.autoが見つかりません。'make env-load'を実行してください"; \
+		exit 1; \
+	fi; \
+	source .env.auto; \
+	PRIVATE_IP_E="$$INSTANCE_ID_E_PRIVATE_IP"; \
+	INSTANCE_ID_D=$$(aws ec2 describe-instances --profile $(AWS_PROFILE) --region $(AWS_REGION) \
 		--filters "Name=tag:Name,Values=kishax-$(ENVIRONMENT)-jump-server" "Name=instance-state-name,Values=running" \
 		--query 'Reservations[0].Instances[0].InstanceId' --output text 2>/dev/null); \
-	PRIVATE_IP_E=$$(aws ec2 describe-instances --profile $(AWS_PROFILE) --region $(AWS_REGION) \
-		--filters "Name=tag:Name,Values=kishax-$(ENVIRONMENT)-terraria-server" \
-		--query 'Reservations[0].Instances[0].PrivateIpAddress' --output text 2>/dev/null); \
 	if [ -z "$$INSTANCE_ID_D" ] || [ "$$INSTANCE_ID_D" = "None" ]; then \
 		echo "❌ Jump Serverが起動していません"; \
 		exit 1; \
 	fi; \
 	if [ -z "$$PRIVATE_IP_E" ] || [ "$$PRIVATE_IP_E" = "None" ]; then \
-		echo "❌ Terraria Serverが見つかりません"; \
+		echo "❌ Terraria Serverのプライベート IPが見つかりません (.env.auto)"; \
 		exit 1; \
 	fi; \
 	echo "Jump Server: $$INSTANCE_ID_D"; \

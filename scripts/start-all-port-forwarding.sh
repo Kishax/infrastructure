@@ -57,36 +57,22 @@ fi
 
 echo -e "${GREEN}✅ Jump Server: $INSTANCE_ID_D${NC}"
 
-# プライベートIPを取得
+# プライベートIPを.env.autoから取得
 echo ""
-echo -e "${BLUE}🔍 プライベートIPを取得中...${NC}"
+echo -e "${BLUE}🔍 プライベートIPを.env.autoから取得中...${NC}"
 
-PRIVATE_IP_A=$(aws ec2 describe-instances \
-    --profile "$AWS_PROFILE" \
-    --region "$AWS_REGION" \
-    --filters "Name=tag:Name,Values=kishax-${ENVIRONMENT}-mc-server" \
-    --query 'Reservations[0].Instances[0].PrivateIpAddress' \
-    --output text 2>/dev/null)
+# .env.autoから環境変数を読み込み
+PRIVATE_IP_A="${INSTANCE_ID_A_PRIVATE_IP}"
+PRIVATE_IP_B="${INSTANCE_ID_B_PRIVATE_IP}"
+PRIVATE_IP_C="${INSTANCE_ID_C_PRIVATE_IP}"
+PRIVATE_IP_E="${INSTANCE_ID_E_PRIVATE_IP}"
 
-PRIVATE_IP_B=$(aws ec2 describe-instances \
-    --profile "$AWS_PROFILE" \
-    --region "$AWS_REGION" \
-    --filters "Name=tag:Name,Values=kishax-${ENVIRONMENT}-api-server" \
-    --query 'Reservations[0].Instances[0].PrivateIpAddress' \
-    --output text 2>/dev/null)
-
-PRIVATE_IP_C=$(aws ec2 describe-instances \
-    --profile "$AWS_PROFILE" \
-    --region "$AWS_REGION" \
-    --filters "Name=tag:Name,Values=kishax-${ENVIRONMENT}-web-server" \
-    --query 'Reservations[0].Instances[0].PrivateIpAddress' \
-    --output text 2>/dev/null)
-
-echo -e "${GREEN}✅ MC Server (i-a):  $PRIVATE_IP_A${NC}"
-echo -e "${GREEN}✅ API Server (i-b): $PRIVATE_IP_B${NC}"
-echo -e "${GREEN}✅ Web Server (i-c): $PRIVATE_IP_C${NC}"
-echo -e "${GREEN}✅ RDS MySQL:        $RDS_MYSQL_HOST${NC}"
-echo -e "${GREEN}✅ RDS PostgreSQL:   $RDS_POSTGRES_HOST${NC}"
+echo -e "${GREEN}✅ MC Server (i-a):      ${PRIVATE_IP_A:-None}${NC}"
+echo -e "${GREEN}✅ API Server (i-b):     ${PRIVATE_IP_B:-None}${NC}"
+echo -e "${GREEN}✅ Web Server (i-c):     ${PRIVATE_IP_C:-None}${NC}"
+echo -e "${GREEN}✅ Terraria Server (i-e): ${PRIVATE_IP_E:-None}${NC}"
+echo -e "${GREEN}✅ RDS MySQL:            $RDS_MYSQL_HOST${NC}"
+echo -e "${GREEN}✅ RDS PostgreSQL:       $RDS_POSTGRES_HOST${NC}"
 
 # ログディレクトリの作成
 LOG_DIR="$HOME/.kishax-ssm-logs"
@@ -206,6 +192,10 @@ if [ -n "$PRIVATE_IP_C" ] && [ "$PRIVATE_IP_C" != "None" ]; then
     start_port_forward "Web Server" "$PRIVATE_IP_C" "22" "2224"
 fi
 
+if [ -n "$PRIVATE_IP_E" ] && [ "$PRIVATE_IP_E" != "None" ]; then
+    start_port_forward "Terraria Server" "$PRIVATE_IP_E" "22" "2225"
+fi
+
 if [ -n "$RDS_MYSQL_HOST" ] && [ "$RDS_MYSQL_HOST" != "None" ]; then
     start_port_forward "RDS MySQL" "$RDS_MYSQL_HOST" "${RDS_MYSQL_PORT:-3306}" "3307"
 fi
@@ -223,6 +213,7 @@ echo -e "${BLUE}📊 接続情報:${NC}"
 echo -e "  🖥️  MC Server:       ssh -i minecraft.pem -p 2222 ec2-user@localhost"
 echo -e "  🖥️  API Server:      ssh -i minecraft.pem -p 2223 ec2-user@localhost"
 echo -e "  🖥️  Web Server:      ssh -i minecraft.pem -p 2224 ec2-user@localhost"
+echo -e "  🖥️  Terraria Server: ssh -i minecraft.pem -p 2225 ec2-user@localhost"
 echo -e "  🗄️  MySQL:           mysql -h 127.0.0.1 -P 3307 -u root -p kishax_mc"
 echo -e "  🗄️  PostgreSQL:      psql -h 127.0.0.1 -p 5433 -U postgres -d kishax_web"
 echo ""

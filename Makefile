@@ -390,80 +390,12 @@ ssm-postgres: ## RDS PostgreSQL へポートフォワーディング (localhost:
 		--profile $(AWS_PROFILE)
 
 ## =============================================================================
-## SSH接続（純粋なSSH - 事前に ssm-* でポートフォワーディングが必要）
+## DB接続
 ## =============================================================================
 
-.PHONY: ssh-mc ssh-api ssh-web ssh-terra ssh-mysql ssh-postgres delete-user login-mysql
+.PHONY: connect-mysql connect-postgres delete-user
 
-ssh-mc: ## i-a (MC Server) へSSH接続 (要: 別ターミナルで make ssm-mc)
-	@echo "🔗 MC Server (i-a) へSSH接続します..."
-	@if [ ! -f "$(SSH_KEY)" ]; then \
-		echo "❌ SSH鍵ファイルが見つかりません: $(SSH_KEY)"; \
-		exit 1; \
-	fi; \
-	echo "SSH Key: $(SSH_KEY)"; \
-	echo "Local Port: 2222"; \
-	echo ""; \
-	echo "⚠️  事前に別ターミナルで 'make ssm-mc' を実行してください"; \
-	echo ""; \
-	ssh -i $(SSH_KEY) -p 2222 \
-		-o StrictHostKeyChecking=no \
-		-o UserKnownHostsFile=/dev/null \
-		-o LogLevel=ERROR \
-		ec2-user@localhost
-
-ssh-api: ## i-b (API Server) へSSH接続 (要: 別ターミナルで make ssm-api)
-	@echo "🔗 API Server (i-b) へSSH接続します..."
-	@if [ ! -f "$(SSH_KEY)" ]; then \
-		echo "❌ SSH鍵ファイルが見つかりません: $(SSH_KEY)"; \
-		exit 1; \
-	fi; \
-	echo "SSH Key: $(SSH_KEY)"; \
-	echo "Local Port: 2223"; \
-	echo ""; \
-	echo "⚠️  事前に別ターミナルで 'make ssm-api' を実行してください"; \
-	echo ""; \
-	ssh -i $(SSH_KEY) -p 2223 \
-		-o StrictHostKeyChecking=no \
-		-o UserKnownHostsFile=/dev/null \
-		-o LogLevel=ERROR \
-		ec2-user@localhost
-
-ssh-web: ## i-c (Web Server) へSSH接続 (要: 別ターミナルで make ssm-web)
-	@echo "🔗 Web Server (i-c) へSSH接続します..."
-	@if [ ! -f "$(SSH_KEY)" ]; then \
-		echo "❌ SSH鍵ファイルが見つかりません: $(SSH_KEY)"; \
-		exit 1; \
-	fi; \
-	echo "SSH Key: $(SSH_KEY)"; \
-	echo "Local Port: 2224"; \
-	echo ""; \
-	echo "⚠️  事前に別ターミナルで 'make ssm-web' を実行してください"; \
-	echo ""; \
-	ssh -i $(SSH_KEY) -p 2224 \
-		-o StrictHostKeyChecking=no \
-		-o UserKnownHostsFile=/dev/null \
-		-o LogLevel=ERROR \
-		ec2-user@localhost
-
-ssh-terra: ## i-e (Terraria Server) へSSH接続 (要: 別ターミナルで make ssm-terra)
-	@echo "🔗 Terraria Server (i-e) へSSH接続します..."
-	@if [ ! -f "$(SSH_KEY)" ]; then \
-		echo "❌ SSH鍵ファイルが見つかりません: $(SSH_KEY)"; \
-		exit 1; \
-	fi; \
-	echo "SSH Key: $(SSH_KEY)"; \
-	echo "Local Port: 2225"; \
-	echo ""; \
-	echo "⚠️  事前に別ターミナルで 'make ssm-terra' を実行してください"; \
-	echo ""; \
-	ssh -i $(SSH_KEY) -p 2225 \
-		-o StrictHostKeyChecking=no \
-		-o UserKnownHostsFile=/dev/null \
-		-o LogLevel=ERROR \
-		ec2-user@localhost
-
-ssh-mysql: ## RDS MySQL へMySQL接続 (要: 別ターミナルで make ssm-mysql)
+connect-mysql: ## RDS MySQL へMySQL接続 (要: 別ターミナルで make ssm-mysql)
 	@echo "🔗 RDS MySQL へMySQL接続します..."
 	@if [ ! -f .env.auto ]; then \
 		echo "❌ .env.autoが見つかりません。'make env-load'を実行してください"; \
@@ -483,7 +415,7 @@ ssh-mysql: ## RDS MySQL へMySQL接続 (要: 別ターミナルで make ssm-mysq
 	echo ""; \
 	mysql -h 127.0.0.1 -P 3307 -u "$$MYSQL_USER" -p"$$MYSQL_PASSWORD" kishax_mc
 
-ssh-postgres: ## RDS PostgreSQL へpsql接続 (要: 別ターミナルで make ssm-postgres)
+connect-postgres: ## RDS PostgreSQL へpsql接続 (要: 別ターミナルで make ssm-postgres)
 	@echo "🔗 RDS PostgreSQL へpsql接続します..."
 	@if [ ! -f .env.auto ]; then \
 		echo "❌ .env.autoが見つかりません。'make env-load'を実行してください"; \
@@ -502,18 +434,6 @@ ssh-postgres: ## RDS PostgreSQL へpsql接続 (要: 別ターミナルで make s
 	echo "⚠️  事前に別ターミナルで 'make ssm-postgres' を実行してください"; \
 	echo ""; \
 	PGPASSWORD="$$POSTGRES_PASSWORD" psql -h 127.0.0.1 -p 5433 -U "$$POSTGRES_USER" -d kishax_web
-
-login-mysql: ## RDS MySQL へMySQL接続
-	@echo "🔗 RDS MySQL へMySQL接続します..."
-	@if [ ! -f .env.auto ]; then \
-		echo "❌ .env.autoが見つかりません。'make env-load'を実行してください"; \
-		exit 1; \
-	fi; \
-	source .env && source .env.auto; \
-	echo ""; \
-	echo "⚠️  事前に別ターミナルで 'make ssm-mysql' を実行してください"; \
-	echo ""; \
-	mysql -h 127.0.0.1 -P 3307 -u "$$MYSQL_USER" -p"$$MYSQL_PASSWORD" kishax_mc
 
 delete-user: ## 指定ユーザーをMySQL/PostgreSQLから削除 (要: make ssm-mysql & make ssm-postgres)
 	@echo "🗑️  ユーザーデータを削除します"

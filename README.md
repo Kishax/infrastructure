@@ -11,6 +11,7 @@ KishaX の統合インフラストラクチャプロジェクト
 - [2025/12 - EC2移行直後](assets/202512/2-infrastructure.png)
 - [2025/12 - EC2移行前](assets/202512/1-infrastructure.png)
 - [2025/06 - ECS/Fargate環境](assets/202506/1-infrastructure.png)
+- 2023~2025/05: 自宅サーバ環境
 
 ## 📋 Project Structure
 

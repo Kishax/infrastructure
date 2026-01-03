@@ -89,8 +89,8 @@ resource "aws_scheduler_schedule" "stop_instances" {
     mode = "OFF"
   }
 
-  # Cron expression: 03:00 JST = 18:00 UTC (previous day)
-  schedule_expression          = "cron(0 18 * * ? *)"
+  # Cron expression: 03:00 JST (27:00 JST)
+  schedule_expression          = "cron(0 3 * * ? *)"
   schedule_expression_timezone = "Asia/Tokyo"
 
   target {

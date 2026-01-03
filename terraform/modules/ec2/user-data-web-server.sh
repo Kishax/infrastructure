@@ -131,10 +131,14 @@ done
 echo "API Server Private IP: $API_PRIVATE_IP"
 
 # Build PostgreSQL connection string with URL encoding
-PG_HOST=$(get_param "/kishax/production/shared/postgres_host")
+PG_ENDPOINT=$(get_param "/kishax/production/shared/postgres_host")
+PG_HOST_ONLY=$${PG_ENDPOINT%:*}  # Remove port if present
 PG_DB=$(get_param "/kishax/production/shared/postgres_database")
 PG_USER=$(get_param "/kishax/production/shared/postgres_user")
-PG_PASS=$(get_secret_param "/kishax/production/shared/postgres_password")
+PG_PASS_RAW=$(get_secret_param "/kishax/production/shared/postgres_password")
+
+# URL encode password (replace # with %23, $ with %24)
+PG_PASS_ENCODED=$(echo "$${PG_PASS_RAW}" | sed 's/#/%23/g; s/\$/%24/g')
 
 # Generate .env file
 cat > /opt/web/.env <<EOF
@@ -143,7 +147,7 @@ cat > /opt/web/.env <<EOF
 # ===================================
 
 # Database Configuration (RDS PostgreSQL)
-DATABASE_URL=postgresql://${PG_USER}:${PG_PASS}@${PG_HOST}:5432/${PG_DB}
+DATABASE_URL=postgresql://$${PG_USER}:$${PG_PASS_ENCODED}@$${PG_HOST_ONLY}:5432/$${PG_DB}
 
 # AWS SQS Configuration
 AWS_REGION=$(get_param "/kishax/production/shared/aws_region")
@@ -154,7 +158,7 @@ TO_MC_QUEUE_URL=$(get_param "/kishax/production/shared/to_mc_queue_url")
 TO_DISCORD_QUEUE_URL=$(get_param "/kishax/production/shared/to_discord_queue_url")
 
 # Redis Configuration (i-b上のRedis #2)
-REDIS_URL=redis://${API_PRIVATE_IP}:${REDIS_WEB_PORT}
+REDIS_URL=redis://$${API_PRIVATE_IP}:$${REDIS_WEB_PORT}
 REDIS_CONNECTION_TIMEOUT=$(get_param "/kishax/production/web/redis_connection_timeout")
 REDIS_COMMAND_TIMEOUT=$(get_param "/kishax/production/web/redis_command_timeout")
 

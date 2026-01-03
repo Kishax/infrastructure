@@ -131,6 +131,10 @@ done
 
 echo "API Server Private IP: $API_PRIVATE_IP"
 
+# Get MySQL endpoint and remove port if present
+MYSQL_ENDPOINT=$(get_param "/kishax/production/shared/mysql_host")
+MYSQL_HOST_ONLY=$${MYSQL_ENDPOINT%:*}
+
 # Generate .env file
 cat > /opt/mc/.env <<EOF
 # ===================================
@@ -141,7 +145,7 @@ cat > /opt/mc/.env <<EOF
 OVERALL_MEMORY=$(get_param "/kishax/production/mc/overall_memory")
 
 # MySQL Configuration (RDS MySQL)
-MYSQL_HOST=$(get_param "/kishax/production/shared/mysql_host")
+MYSQL_HOST=$${MYSQL_HOST_ONLY}
 MYSQL_DATABASE=$(get_param "/kishax/production/shared/mysql_database")
 MYSQL_USER=$(get_param "/kishax/production/shared/mysql_user")
 MYSQL_PASSWORD='$(get_secret_param "/kishax/production/shared/mysql_password")'
@@ -150,7 +154,7 @@ MYSQL_PASSWORD='$(get_secret_param "/kishax/production/shared/mysql_password")'
 SEED_ENV=$(get_param "/kishax/production/mc/seed_env")
 
 # Auth API Configuration (i-b)
-AUTH_API_URL=http://${API_PRIVATE_IP}:8080
+AUTH_API_URL=http://$${API_PRIVATE_IP}:8080
 AUTH_API_KEY=$(get_secret_param "/kishax/production/shared/auth_api_key")
 MC_CONFIRM_BASE_URL=$(get_param "/kishax/production/mc/mc_confirm_base_url")
 
@@ -163,7 +167,7 @@ TO_MC_QUEUE_URL=$(get_param "/kishax/production/shared/to_mc_queue_url")
 TO_DISCORD_QUEUE_URL=$(get_param "/kishax/production/shared/to_discord_queue_url")
 
 # Redis Configuration (i-b host Redis #1)
-REDIS_URL=redis://${API_PRIVATE_IP}:${REDIS_MC_PORT}
+REDIS_URL=redis://$${API_PRIVATE_IP}:$${REDIS_MC_PORT}
 REDIS_CONNECTION_TIMEOUT=$(get_param "/kishax/production/mc/redis_connection_timeout")
 REDIS_COMMAND_TIMEOUT=$(get_param "/kishax/production/mc/redis_command_timeout")
 

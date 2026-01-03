@@ -94,7 +94,7 @@ get_secret_param() {
 PG_PASS_RAW=$(get_secret_param "/kishax/production/shared/postgres_password")
 
 # URL encode password (replace # with %23, $ with %24)
-PG_PASS_ENCODED=$(echo "$${PG_PASS_RAW}" | sed 's/#/%23/g; s/\$/%24/g')
+PG_PASS_ENCODED=$(echo "${PG_PASS_RAW}" | sed 's/#/%23/g; s/\$/%24/g')
 
 # Generate .env file
 cat > /opt/api/.env <<EOF
@@ -103,7 +103,7 @@ cat > /opt/api/.env <<EOF
 # ===================================
 
 # Database Configuration (RDS PostgreSQL)
-DATABASE_URL="jdbc:postgresql://$(get_param "/kishax/production/shared/postgres_host")/$(get_param "/kishax/production/shared/postgres_database")?user=$(get_param "/kishax/production/shared/postgres_user")&password=$${PG_PASS_ENCODED}"
+DATABASE_URL="jdbc:postgresql://$(get_param "/kishax/production/shared/postgres_host")/$(get_param "/kishax/production/shared/postgres_database")?user=$(get_param "/kishax/production/shared/postgres_user")&password=${PG_PASS_ENCODED}"
 
 # AWS SQS Configuration
 AWS_REGION=$(get_param "/kishax/production/shared/aws_region")

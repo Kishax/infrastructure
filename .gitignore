@@ -74,6 +74,7 @@ node_modules/
 data/latest/
 data/home/
 data/terraria/*
+data/mc-latest-1-21-11/*
 !data/terraria/Makefile
 !data/terraria/setup
 !data/terraria/start

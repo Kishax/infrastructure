@@ -56,8 +56,8 @@ resource "aws_scheduler_schedule" "start_instances" {
     mode = "OFF"
   }
 
-  # Cron expression: 22:00 JST = 13:00 UTC (JST = UTC+9)
-  schedule_expression          = "cron(0 13 * * ? *)"
+  # Cron expression: 22:00 JST
+  schedule_expression          = "cron(0 22 * * ? *)"
   schedule_expression_timezone = "Asia/Tokyo"
 
   target {

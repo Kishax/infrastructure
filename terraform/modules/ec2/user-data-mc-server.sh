@@ -92,7 +92,14 @@ yum install -y git
 
 # Clone application repository
 echo "Cloning MC application from GitHub..."
-git clone -b master https://github.com/Kishax/kishax.git /opt/mc
+if [ -d "/opt/mc/.git" ]; then
+  echo "/opt/mc already exists with git repository, skipping clone"
+  cd /opt/mc
+  sudo -u ec2-user git pull origin master
+else
+  sudo rm -rf /opt/mc
+  git clone -b master https://github.com/Kishax/kishax.git /opt/mc
+fi
 sudo chown -R ec2-user:ec2-user /opt/mc
 
 # Generate .env file from SSM Parameter Store

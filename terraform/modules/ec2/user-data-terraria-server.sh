@@ -60,7 +60,14 @@ yum install -y git
 
 # Clone application repository
 echo "Cloning Terraria application from GitHub..."
-git clone -b master https://github.com/Kishax/kishax-terraria.git /opt/terraria
+if [ -d "/opt/terraria/.git" ]; then
+  echo "/opt/terraria already exists with git repository, skipping clone"
+  cd /opt/terraria
+  sudo -u ec2-user git pull origin master
+else
+  sudo rm -rf /opt/terraria
+  git clone -b master https://github.com/Kishax/kishax-terraria.git /opt/terraria
+fi
 sudo chown -R ec2-user:ec2-user /opt/terraria
 
 # Generate .env file from SSM Parameter Store

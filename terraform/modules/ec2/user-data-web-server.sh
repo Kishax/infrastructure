@@ -64,7 +64,14 @@ yum install -y git
 
 # Clone application repository
 echo "Cloning Web application from GitHub..."
-git clone -b master https://github.com/Kishax/kishax-web.git /opt/web
+if [ -d "/opt/web/.git" ]; then
+  echo "/opt/web already exists with git repository, skipping clone"
+  cd /opt/web
+  sudo -u ec2-user git pull origin master
+else
+  sudo rm -rf /opt/web
+  git clone -b master https://github.com/Kishax/kishax-web.git /opt/web
+fi
 sudo chown -R ec2-user:ec2-user /opt/web
 
 # Generate .env file from SSM Parameter Store

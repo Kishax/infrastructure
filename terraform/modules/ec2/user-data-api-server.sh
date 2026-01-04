@@ -61,10 +61,7 @@ yum install -y git
 
 # Clone application repository
 echo "Cloning API application from GitHub..."
-cd /tmp
-git clone -b master https://github.com/Kishax/kishax-api.git api-repo
-sudo cp -r api-repo/* /opt/api/
-rm -rf api-repo
+git clone -b master https://github.com/Kishax/kishax-api.git /opt/api
 sudo chown -R ec2-user:ec2-user /opt/api
 
 # Update SSM Parameter with Private IP for dynamic discovery by other instances

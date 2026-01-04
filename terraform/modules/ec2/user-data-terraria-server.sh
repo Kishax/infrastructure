@@ -60,10 +60,7 @@ yum install -y git
 
 # Clone application repository
 echo "Cloning Terraria application from GitHub..."
-cd /tmp
-git clone -b master https://github.com/Kishax/kishax-terraria.git terraria-repo
-sudo cp -r terraria-repo/* /opt/terraria/
-rm -rf terraria-repo
+git clone -b master https://github.com/Kishax/kishax-terraria.git /opt/terraria
 sudo chown -R ec2-user:ec2-user /opt/terraria
 
 # Generate .env file from SSM Parameter Store

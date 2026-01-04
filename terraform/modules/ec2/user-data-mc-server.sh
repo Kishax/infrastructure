@@ -92,10 +92,7 @@ yum install -y git
 
 # Clone application repository
 echo "Cloning MC application from GitHub..."
-cd /tmp
-git clone -b master https://github.com/Kishax/kishax.git mc-repo
-sudo cp -r mc-repo/* /opt/mc/
-rm -rf mc-repo
+git clone -b master https://github.com/Kishax/kishax.git /opt/mc
 sudo chown -R ec2-user:ec2-user /opt/mc
 
 # Generate .env file from SSM Parameter Store
